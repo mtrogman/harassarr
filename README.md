@@ -2,7 +2,7 @@
 
 # harassarr
 
-A Discord bot to delete and (re)search for media
+A Discord bot to automate notifications to users on your media server that their subscription is about to end.
 
 [![Release](https://img.shields.io/github/v/release/mtrogman/harassarr?color=yellow&include_prereleases&label=version&style=flat-square)](https://github.com/mtrogman/harassarr/releases)
 [![Docker](https://img.shields.io/docker/pulls/mtrogman/harassarr?style=flat-square)](https://hub.docker.com/r/mtrogman/harassarr)
