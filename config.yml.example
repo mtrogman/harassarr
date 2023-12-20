@@ -1,16 +1,22 @@
 bot:
   token: PUT_DISCORD_BOT_TOKEN_HERE
 
+database:
+  user: XXXXXXXX
+  password: XXXXXXXX
+  host: XXXXXXXX
+  table: XXXXXXXX
+
 PlexServer1:
-  plex_base_url = http://XXX.XXX.XXX.XXX:32400
-  plex_token = XXXXXXXX
-  plex_user = XXXXXXXX
-  plex_pass = Yes
-  discord_role = XXXXXXXX
+  plex_base_url: http://XXX.XXX.XXX.XXX:32400
+  plex_token: XXXXXXXX
+  plex_user: XXXXXXXX
+  plex_pass: Yes
+  discord_role: XXXXXXXX
 
 PlexServerX:
-  plex_base_url = http://XXX.XXX.XXX.XXX:32400
-  plex_token = XXXXXXXX
-  plex_user = XXXXXXXX
-  plex_pass = Yes
-  discord_role = XXXXXXXX
+  plex_base_url: http://XXX.XXX.XXX.XXX:32400
+  plex_token: XXXXXXXX
+  plex_user: XXXXXXXX
+  plex_pass: Yes
+  discord_role: XXXXXXXX
