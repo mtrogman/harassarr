@@ -7,9 +7,9 @@ import logging
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def create_database_and_table():
+def confirm_database_and_table():
     # Load database configuration from YAML file
-    with open('../config/config.yml', 'r') as yaml_file:
+    with open('./config/config.yml', 'r') as yaml_file:
         config_data = yaml.safe_load(yaml_file)
 
     db_config = {
@@ -82,6 +82,3 @@ def create_database_and_table():
             cursor.close()
         if 'cnx' in locals():
             cnx.close()
-
-# Call the function to create the database and table
-create_database_and_table()
