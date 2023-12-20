@@ -15,7 +15,7 @@ A Discord bot to automate notifications to users on your media server that their
 
 # Features
 
-harassarr uses discord, email, and Plex to notify (harass) users that payment is due.  
+harassarr uses discord and email to notify (harass) users that their subscription is due for a renewal.  If the subscription lapses then the user will automatically be removed.    
 
 # Installation and setup
 
