@@ -1,0 +1,50 @@
+name: Update Patch Version on commit
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  patch-version-bump:
+    runs-on: ubuntu-latest
+    # Not update patch version when pushed to main
+    if: github.ref != 'refs/heads/main'
+
+    steps:
+      - name: Set Git User Identity
+        env:
+          GH_EMAIL: ${{ secrets.GH_EMAIL }}
+          GH_USER: ${{ secrets.GH_USER }}
+        run: |
+          git config --global user.email "$GH_EMAIL"
+          git config --global user.name "$GH_USER"
+    
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Bump Patch Version
+        id: bump_version
+        run: |
+          # Parse the current version
+          CURRENT_VERSION=$(cat VERSION)
+          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
+          
+          # Calculate the new version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          # Update the version file
+          echo "$NEW_VERSION" > VERSION
+          echo "Bumped version to $NEW_VERSION"
+          
+          # Set the new version as an output
+          echo "::set-output name=new_version::$NEW_VERSION"
+        
+      - name: Commit and Push Version Bump
+        run: |
+          git add VERSION
+          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git push
