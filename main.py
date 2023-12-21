@@ -1,37 +1,50 @@
-import os
-import yaml
+# main.py
 import logging
 import sys
+import modules.dbFunctions as dbFunctions
+import modules.configFunctions as configFunctions
 
-from modules.createDBUser import create_database_user, get_database_user_input
-from modules.confirmDB import confirm_database_and_table
-
-CONFIG_FILE = './config/config.yml'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def check_config():
-    # Create config directory if it doesn't exist
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-
-    # Check if config file exists, if not, create it with an empty dictionary
-    if not os.path.isfile(CONFIG_FILE):
-        with open(CONFIG_FILE, 'w') as config_file:
-            yaml.dump({}, config_file)
+configFile = "./config/config.yml"
 
 def main():
-    check_config()
+    check = configFunctions.checkConfig(configFile)
+    # fix config
+    if check is False:
+        # reprompt for host, table, user, password.  Set the default of these values as what existed in the config (if nothing existed in config utilize the normal default)
+        config = configFunctions.getConfig(configFile)
+        if 'database' not in config:
+            logging.info("Database configuration not found in config.yml. Using default configuration.")
+            # Create a default structure for the config file
+            default_config = {
+                'database': {
+                    'host': '',
+                    'table': 'media_mgmt',
+                    'user': 'lsql_harassarr',
+                    'password': '',
+                }
+            }
+            # Update the existing config with default values
+            config.update(default_config)
+            with open(configFile, 'w') as file:
+                yaml.dump(config, file)
+        
+        # Set default values based on existing config or use normal defaults
+        host = config['database'].get('host', 'default_host')
+        table = config['database'].get('table', 'default_table')
+        user = config['database'].get('user', 'default_user')
+        password = config['database'].get('password', 'default_password')
+        # validate inputs are successful
+        host, table, user, password = dbFunctions.updateDatabaseConfig(host, table, user, password)
+        # update config.yml's database (host, table, user, password) with the input from above
+        configFunctions.updateDBInfo(host, table, user, password)
+        # Validate the connection with the updated values
+        dbFunctions.validate_connection(user, password, host)
+    else:
+        config = configFunctions.getConfig(configFile)
+        dbFunctions.validate_connection(config['database']['user'], config['database']['password'], config['database']['host'])
+        # update config.yml's database (host, table, user, password) if values changed
 
-    # Load configuration
-    with open(CONFIG_FILE, 'r') as yaml_file:
-        config_data = yaml.safe_load(yaml_file)
-
-    if 'database' not in config_data:
-        logging.info("Database configuration not found in config.yml.")
-        # Run createDBUser.py to create the database and user
-        root_user, root_password, new_user, new_password, database, server = get_database_user_input()
-        create_database_user(root_user, root_password, new_user, new_password, database, server)
-
-    confirm_database_and_table()
 
 if __name__ == "__main__":
     main()
