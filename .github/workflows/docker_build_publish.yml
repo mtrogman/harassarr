@@ -69,10 +69,10 @@ jobs:
           push: true
           platforms: linux/amd64,linux/armhf,linux/arm64
           tags: |
-            mtrogman/grabarr:latest
-            mtrogman/grabarr:${{ steps.vars.outputs.version }}
-            ghcr.io/mtrogman/grabarr:latest
-            ghcr.io/mtrogman/grabarr:${{ steps.vars.outputs.version }}
+            mtrogman/harassarr:latest
+            mtrogman/harassarr:${{ steps.vars.outputs.version }}
+            ghcr.io/mtrogman/harassarr:latest
+            ghcr.io/mtrogman/harassarr:${{ steps.vars.outputs.version }}
           labels: |
             org.opencontainers.image.title=tauticord
             org.opencontainers.image.version=${{ steps.vars.outputs.version }}
