@@ -86,12 +86,12 @@ def main():
             else:
                 logging.warning(f"Skipping invalid PLEX configuration entry: {config}")
             # logic to add additional plex servers
-            if args.add == 'plex':
+            if args.add and args.add.lower() == 'plex':
                 logging.info("Adding Additional Plex configuration(s).")
                 plexFunctions.createPlexConfig(configFile)
                 return
 
-
+    plexFunctions.listPlexUsers(base_url, token, server_name)
 
 
 if __name__ == "__main__":

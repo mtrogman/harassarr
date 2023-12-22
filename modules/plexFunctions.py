@@ -2,8 +2,11 @@
 import sys
 import logging
 import yaml
+import re
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
+from plexapi.library import MovieSection, ShowSection
+
 import modules.validateFuncations as validateFunctions
 import modules.configFunctions as configFunctions
 
@@ -45,7 +48,35 @@ def createPlexConfig(configFile):
     logging.info(f"Authenticated and Stored token for Plex instance: {serverName}")
 
 
-def listPlexUsers(configFile):
-    config = configFunctions.getConfig(configFile)
-    server = config['database'].get('host', '')
-    plex = PlexServer(PLEX_BASE_URL, PLEX_TOKEN)
+def listPlexUsers(base_url, token, server_name):
+    plex = PlexServer(base_url, token)
+    users = plex.myPlexAccount().users()
+    user_list = []
+
+    for user in users:
+        for server_info in user.servers:
+            if server_name == server_info.name:
+                user_info = {
+                    "User ID": user.id,
+                    "Username": user.title,
+                    "Email": user.email,
+                    "Server": server_name,
+                    "Number of Libraries": server_info.numLibraries,
+                    "All Libraries Shared": server_info.allLibraries
+                }
+                # Maybe i store the amount of shared libraries and if 4k is a thing
+                # Or I set a flag for 4K exists or if all libraries could be shared out?
+                print(user_info)
+                user_list.append(user_info)
+
+    print(len(user_list))
+    return user_list
+
+
+    return user_list
+
+
+
+
+
+
