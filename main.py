@@ -14,30 +14,45 @@ def main():
     configCheck = configFunctions.checkConfig(configFile)
     if configCheck:
         logging.info(f"Configuration file (config.yml) looks good")
-    config = configFunctions.getConfig(configFile)
-    host = config['database']['host']
-    port = config['database']['port']
-    database = config['database']['database']
-    user = config['database']['user']
-    password = config['database']['password']
-    table = "users"
+        config = configFunctions.getConfig(configFile)
+        host = config['database']['host']
+        port = config['database']['port']
+        database = config['database']['database']
+        user = config['database']['user']
+        password = config['database']['password']
+        table = "users"
+    else:
+        #This should never happen but let's plan for weird stuff to occur.
+        logging.error(f"Configuration check has failed, please try again.")
+        exit(1)
 
     # Validate Connection to Database is good
+    db_error_flag = False
     serverValidation = validateFunctions.validateServer(host, port)
-    if serverValidation:
-        logging.info(f"Server {host} is listening on {port}")
+    if not serverValidation:
+        logging.error(f"Server {host} is NOT listening on {port}")
+        db_error_flag = True
     databaseValidation = validateFunctions.validateDBConnection(user, password, host)
-    if databaseValidation:
-        logging.info(f"Authenticated with {user} to {host} sucessfully")
+    if not databaseValidation:
+        logging.error(f"Unable to authenticated with {user} to {host}")
+        db_error_flag = True
     validateDBDatabase = validateFunctions.validateDBDatabase(user, password, host, database)
-    if validateDBDatabase:
-        logging.info(f"Database {database} exists on {host}")
+    if not validateDBDatabase:
+        logging.error(f"Database {database} does not exists on {host}")
+        db_error_flag = True
     tableValidation = validateFunctions.validateDBTable(user, password, host, database, table)
-    if tableValidation:
-        logging.info(f"Table {table} exists on {database}")
+    if not tableValidation:
+        logging.error(f"Table {table} does not exists on {database}")
+        db_error_flag = True
+
+    # If unable to connect fully to the DB then force check/update values within config
+    if db_error_flag:
+        configFunctions.updateDatabaseConfig(configFile)
 
     # Validate Connection to Plex is good
-    plexValidation = plexFunctions.createPlexConfig(configFile)
+
+    # plexCreation = plexFunctions.createPlexConfig(configFile)
+
 
 
 if __name__ == "__main__":

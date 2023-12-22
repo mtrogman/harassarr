@@ -64,14 +64,14 @@ def checkConfig(configFile):
 
 def createDatabaseConfig(configFile):
     server = validateFunctions.get_validated_input("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-    port = validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306'
+    port = int(validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
 
     if not validateFunctions.validateServer(server, port):
         while True:
             logging.error(
                 f"Could not connect to the database on port {port}. Please enter a valid IP address or hostname.")
             server = validateFunctions.get_validated_input("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-            port = validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306'
+            port = int(validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
 
             if validateFunctions.validateServer(server, port):
                 break
@@ -125,8 +125,8 @@ def updateDatabaseConfig(configFile):
     password = config['database'].get('password', '')
 
     # Validate Server is a database and listening on expected port
-    server = input(f"Confirm this is where the database is hosted (Current: {server}): ")
-    port = input(f"Confirm this is the port used by the database (Current: {port}): ")
+    server = input(f"Confirm this is where the database is hosted (Current: {server}): ") or server
+    port = int(input(f"Confirm this is the port used by the database (Current: {port}): ") or port)
     if not validateFunctions.validateServer(server, port):
         while True:
             logging.error(f"Could not connect to the database on port 3306. Please enter a valid IP address or hostname.")
@@ -135,52 +135,41 @@ def updateDatabaseConfig(configFile):
 
             if validateFunctions.validateServer(server, port):
                 break
-    port = int(port)
     # Validate user and password are correct and can login to db
-    user = input(f"Enter new user (current user is {user}): ") or user
-    password = input(f"Enter new password (current password is {password}): ") or password
-    cnx = mysql.connector.connect(user=user, password=password, host=server)
-    if cnx:
-        cnx.close()
-    else:
-        while True:
-            logging.error(f"Could not connect to the database with the credentials provided.  Please enter valid creds.")
-            user = input(f"Enter new user (current user is {user}): ") or user
-            password = input(f"Enter new password (current password is {password}): ") or password
-            cnx = mysql.connector.connect(user=user, password=password, host=server)
-            if cnx:
-                cnx.close()
-                break
-            else:
-                logging.error(f"Could not connect to the database with the credentials provided.  Please enter valid creds.")
-    # Validate the database and table exist
-    try:
-        cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
-        cursor = cnx.cursor()
+    while True:
+        user = input(f"Enter new user (current user is {user}): ") or user
+        password = input(f"Enter new password (current password is {password}): ") or password
+        database = input(f"Enter new database (current database is {database}): ") or database
+        # Validate the database and table exist
+        try:
+            cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
+            cursor = cnx.cursor()
 
-        # Check if the database exists
-        cursor.execute("SELECT DATABASE();")
-        current_database = cursor.fetchone()[0]
+            # Check if the database exists
+            cursor.execute("SELECT DATABASE();")
+            current_database = cursor.fetchone()[0]
 
-        # Close the cursor and connection
-        cursor.close()
-        cnx.close()
+            # Close the cursor and connection
+            cursor.close()
+            cnx.close()
 
-    except mysql.connector.Error as err:
-        logging.error(f"Error: {err}")
-        return False
-    database = input(f"Enter database (default is {database}): ") or database
+            # Update config
+            config = getConfig(configFile)
+            config['database'].update({
+                'user': user,
+                'password': password,
+                'host': server,
+                'port': port,
+                'database': database
+            })
 
-    config = getConfig(configFile)
-    config['database'].update({
-        'user': user,
-        'password': password,
-        'host': server,
-        'port': port,
-        'database': database
-    })
+            with open(configFile, 'w') as config_file:
+                yaml.dump(config, config_file)
+            break
 
-    with open(configFile, 'w') as config_file:
-        yaml.dump(config, config_file)
+        except mysql.connector.Error as err:
+            logging.error(f"Error: {err}")
+
+
 
     return True

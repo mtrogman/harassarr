@@ -73,6 +73,7 @@ def get_validated_input(prompt, pattern):
     else:
         return None
 
+
 def validate_input(input_string, pattern):
     while input_string is not None and not re.match(pattern, input_string):
         logging.warning("Invalid input. Please try again.")
