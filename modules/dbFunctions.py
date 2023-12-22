@@ -7,7 +7,6 @@ import logging
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-
 def createDBUser(root_user, root_password, new_user, new_password, database, server):
     try:
         # Connect to MySQL using the root user to check if the user already exists
@@ -44,7 +43,6 @@ def createDBUser(root_user, root_password, new_user, new_password, database, ser
         if 'cnx' in locals():
             cnx.close()
     return True  # Return success
-
 
 
 def createDBStructure(root_user, root_password, database, server):
