@@ -1,6 +1,7 @@
 # harassarr.py
 import logging
 import sys
+import os
 import argparse
 import modules.dbFunctions as dbFunctions
 import modules.configFunctions as configFunctions
@@ -55,6 +56,20 @@ def main():
     if dbErrorFlag:
         configFunctions.updateDatabaseConfig(configFile)
 
+    # Check number of users in users table
+    dbUsersCount = dbFunctions.countDBUsers(user, password, host, database)
+    if dbUsersCount == 0:
+        dbUserAddResponse = validateFunctions.getValidatedInput("Would you like to import users? (Yes or No): ",r'(?i)^(yes|no)$')
+        if dbUserAddResponse.lower() == 'yes':
+            while True:
+                path = input("Enter path to CSV: ")
+
+                # Validate .csv file exists in that location
+                if os.path.exists(path) and path.lower().endswith('.csv'):
+                    userInjection = dbFunctions.injectUsersFromCSV(user, password, host, database, path)
+                else:
+                    print("Invalid file path or file format. Please provide a valid path to a .csv file.")
+
     # Extract PLEX configurations
     plexConfigurations = [
         config[key] for key in config if key.startswith('PLEX-')
@@ -65,8 +80,8 @@ def main():
         logging.info("No valid PLEX configurations found in the config file. Creating PLEX configuration.")
         while True:
             plexFunctions.createPlexConfig(configFile)
-            response = validateFunctions.getValidatedInput("Would you like to configure another Plex server? (Yes or No): ", r'(?i)^(yes|no)$')
-            if response.lower() == 'no':
+            anotherPlexConfigResponse = validateFunctions.getValidatedInput("Would you like to configure another Plex server? (Yes or No): ", r'(?i)^(yes|no)$')
+            if anotherPlexConfigResponse.lower() == 'no':
                 break
 
 

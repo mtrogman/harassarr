@@ -1,7 +1,9 @@
 #dbFunctions.py
 import sys
+import csv
 import mysql.connector
 import logging
+from datetime import datetime
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -103,3 +105,86 @@ def createDBStructure(root_user, root_password, database, server):
         if 'cnx' in locals():
             cnx.close()
     return True
+
+
+def injectUsersFromCSV(user, password, server, database, csvFilePath):
+    # Database connection parameters
+    db_config = {
+        'host': server,
+        'user': user,
+        'password': password,
+        'database': database
+    }
+
+    try:
+        # Open database connection
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+
+        # Read data from CSV file
+        with open(csvFilePath, 'r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+                # Convert date strings to datetime objects
+                startDate = datetime.strptime(row['Start'], '%m/%d/%Y').date()
+                endDate = datetime.strptime(row['End'], '%m/%d/%Y').date()
+                joinedDate = datetime.strptime(row['Joined'], '%m/%d/%Y').date()
+
+                # SQL query to insert data into the 'users' table
+                insert_query = """
+                    INSERT INTO users (PrimaryDiscord, SecondaryDiscord, PrimaryEmail, SecondaryEmail,
+                                      NotifyDiscord, NotifyEmail, Status, Server, 4K, PaidAmount,
+                                      Medium, Name, Start, End, Joined)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+
+                # Data to be inserted
+                data = (
+                    row['PrimaryDiscord'], row['SecondaryDiscord'], row['PrimaryEmail'], row['SecondaryEmail'],
+                    row['NotifyDiscord'], row['NotifyEmail'], row['Status'], row['Server'], row['4K'],
+                    row['Paid Amount'], row['Medium'], row['Name'], startDate, endDate, joinedDate
+                )
+
+                # Execute the SQL query
+                cursor.execute(insert_query, data)
+
+        # Commit changes and close connection
+        connection.commit()
+        connection.close()
+
+        print("Data inserted successfully.")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+
+def countDBUsers(user, password, server, database):
+    # Database connection parameters
+    db_config = {
+        'host': server,
+        'user': user,
+        'password': password,
+        'database': database
+    }
+
+    try:
+        # Open database connection
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+
+        # SQL query to count rows in the 'users' table
+        countQuery = "SELECT COUNT(*) FROM users"
+
+        # Execute the SQL query
+        cursor.execute(countQuery)
+
+        # Fetch the result
+        count = cursor.fetchone()[0]
+
+        # Close connection
+        connection.close()
+
+        return count
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
