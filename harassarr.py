@@ -13,7 +13,7 @@ def main():
     # Validate Configuration is good
     configCheck = configFunctions.checkConfig(configFile)
     if configCheck:
-        logging.info(f"Configuration file (config.yml) looks good")
+        logging.info(f"Database portion of configuration file (config.yml) looks good")
         config = configFunctions.getConfig(configFile)
         host = config['database']['host']
         port = config['database']['port']
@@ -49,9 +49,37 @@ def main():
     if db_error_flag:
         configFunctions.updateDatabaseConfig(configFile)
 
-    # Validate Connection to Plex is good
+    # Extract PLEX configurations
+    plex_configurations = [
+        config[key] for key in config if key.startswith('PLEX-')
+    ]
 
-    # plexCreation = plexFunctions.createPlexConfig(configFile)
+    # Check if there are any PLEX configurations
+    if len(plex_configurations) == 0:
+        logging.info("No valid PLEX configurations found in the config file. Creating PLEX configuration.")
+        while True:
+            plexFunctions.createPlexConfig(configFile)
+            response = validateFunctions.getValidatedInput("Would you like to configure another Plex server? (Yes or No): ", r'(?i)^(yes|no)$')
+            if response.lower() == 'no':
+                break
+
+
+    else:
+        logging.info("PLEX configuration(s) found in the config file (config.yml).")
+
+        for config in plex_configurations:
+            base_url = config.get("base_url")
+            token = config.get("token")
+            server_name = config.get("server_name")
+
+            if base_url and token:
+                logging.info(f"Connecting to Plex instance: {server_name}")
+                plexValidation = validateFunctions.validatePlex(base_url, token)
+                if plexValidation:
+                    logging.info(f"Successfully connected to Plex instance: {server_name}")
+            else:
+                logging.warning(f"Skipping invalid PLEX configuration entry: {config}")
+
 
 
 

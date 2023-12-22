@@ -3,6 +3,7 @@ import sys
 import logging
 import socket
 import mysql.connector
+from plexapi.server import PlexServer
 import re
 
 
@@ -66,16 +67,30 @@ def validateDBTable(user, password, server, database, table):
         return False
 
 
-def get_validated_input(prompt, pattern):
+def getValidatedInput(prompt, pattern):
     user_input = input(prompt)
     if user_input != '':
-        return validate_input(user_input, pattern)
+        return validateInput(user_input, pattern)
     else:
         return None
 
 
-def validate_input(input_string, pattern):
+def validateInput(input_string, pattern):
     while input_string is not None and not re.match(pattern, input_string):
         logging.warning("Invalid input. Please try again.")
         input_string = input()
     return input_string
+
+
+def validatePlex(base_url, token):
+    try:
+        plex = PlexServer(base_url, token)
+        if plex:
+            # Logged into plex
+            return True
+    except Exception as e:
+        # probably rate limited.
+        logging.error(f"Error with plex login. Please check Plex authentication details.")
+        logging.error(f"If you have restarted the bot multiple times recently, this is most likely due to being ratelimited on the Plex API. Try again in 10 minutes.")
+        logging.error(f'Error: {e}')
+        return False
