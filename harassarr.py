@@ -1,6 +1,7 @@
-# main.py
+# harassarr.py
 import logging
 import sys
+import argparse
 import modules.dbFunctions as dbFunctions
 import modules.configFunctions as configFunctions
 import modules.plexFunctions as plexFunctions
@@ -10,6 +11,11 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 configFile = "./config/config.yml"
 
 def main():
+    parser = argparse.ArgumentParser(description='Harassarr Script')
+    parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
+
+    args = parser.parse_args()
+
     # Validate Configuration is good
     configCheck = configFunctions.checkConfig(configFile)
     if configCheck:
@@ -79,6 +85,11 @@ def main():
                     logging.info(f"Successfully connected to Plex instance: {server_name}")
             else:
                 logging.warning(f"Skipping invalid PLEX configuration entry: {config}")
+            # logic to add additional plex servers
+            if args.add == 'plex':
+                logging.info("Adding Additional Plex configuration(s).")
+                plexFunctions.createPlexConfig(configFile)
+                return
 
 
 
