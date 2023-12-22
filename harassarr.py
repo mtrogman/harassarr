@@ -33,35 +33,35 @@ def main():
         exit(1)
 
     # Validate Connection to Database is good
-    db_error_flag = False
+    dbErrorFlag = False
     serverValidation = validateFunctions.validateServer(host, port)
     if not serverValidation:
         logging.error(f"Server {host} is NOT listening on {port}")
-        db_error_flag = True
+        dbErrorFlag = True
     databaseValidation = validateFunctions.validateDBConnection(user, password, host)
     if not databaseValidation:
         logging.error(f"Unable to authenticated with {user} to {host}")
-        db_error_flag = True
+        dbErrorFlag = True
     validateDBDatabase = validateFunctions.validateDBDatabase(user, password, host, database)
     if not validateDBDatabase:
         logging.error(f"Database {database} does not exists on {host}")
-        db_error_flag = True
+        dbErrorFlag = True
     tableValidation = validateFunctions.validateDBTable(user, password, host, database, table)
     if not tableValidation:
         logging.error(f"Table {table} does not exists on {database}")
-        db_error_flag = True
+        dbErrorFlag = True
 
     # If unable to connect fully to the DB then force check/update values within config
-    if db_error_flag:
+    if dbErrorFlag:
         configFunctions.updateDatabaseConfig(configFile)
 
     # Extract PLEX configurations
-    plex_configurations = [
+    plexConfigurations = [
         config[key] for key in config if key.startswith('PLEX-')
     ]
 
     # Check if there are any PLEX configurations
-    if len(plex_configurations) == 0:
+    if len(plexConfigurations) == 0:
         logging.info("No valid PLEX configurations found in the config file. Creating PLEX configuration.")
         while True:
             plexFunctions.createPlexConfig(configFile)
@@ -73,16 +73,18 @@ def main():
     else:
         logging.info("PLEX configuration(s) found in the config file (config.yml).")
 
-        for config in plex_configurations:
-            base_url = config.get("base_url")
+        for config in plexConfigurations:
+            baseUrl = config.get("baseUrl")
             token = config.get("token")
-            server_name = config.get("server_name")
+            serverName = config.get("serverName")
+            standardLibraries = config.get("standardLibraries")
+            optionalLibraries = config.get("optionalLibraries")
 
-            if base_url and token:
-                logging.info(f"Connecting to Plex instance: {server_name}")
-                plexValidation = validateFunctions.validatePlex(base_url, token)
+            if baseUrl and token:
+                logging.info(f"Connecting to Plex instance: {serverName}")
+                plexValidation = validateFunctions.validatePlex(baseUrl, token)
                 if plexValidation:
-                    logging.info(f"Successfully connected to Plex instance: {server_name}")
+                    logging.info(f"Successfully connected to Plex instance: {serverName}")
             else:
                 logging.warning(f"Skipping invalid PLEX configuration entry: {config}")
             # logic to add additional plex servers
@@ -91,8 +93,8 @@ def main():
                 plexFunctions.createPlexConfig(configFile)
                 return
 
-    plexFunctions.listPlexUsers(base_url, token, server_name)
-
+            plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
+            print(plexUserInfo)
 
 if __name__ == "__main__":
     main()

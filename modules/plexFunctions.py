@@ -18,10 +18,11 @@ def createPlexConfig(configFile):
     username = ""
     password = ""
     serverName = ""
+
     while True:
-        username = input(f"Enter plex user (Default: {username}): ") or username
-        password = input(f"Enter plex password (Default: {password}): ") or password
-        serverName = input(f"Enter the plex server name (Friendly Name) (Default: {serverName}): ") or serverName
+        username = input(f"Enter Plex user (Default: {username}): ") or username
+        password = input(f"Enter Plex password (Default: {password}): ") or password
+        serverName = input(f"Enter Plex server name (Friendly Name) (Default: {serverName}): ") or serverName
 
         try:
             account = MyPlexAccount(username, password)
@@ -30,50 +31,98 @@ def createPlexConfig(configFile):
                 break
         except Exception as e:
             if str(e).startswith("(429)"):
-                logging.error(f"Too many requests. Please try again later.")
+                logging.error("Too many requests. Please try again later.")
                 return
-            logging.error(f"Could not connect to Plex server. Please check your credentials.")
+            logging.error("Could not connect to Plex server. Please check your credentials.")
 
     config = configFunctions.getConfig(configFile)
     formattedServerName = "PLEX-" + serverName.replace(" ", "_")
     config.setdefault(formattedServerName, {})
 
+    # List available libraries and let the user choose
+    libraries = plex.library.sections()
+    print("Available Libraries:")
+    for i, library in enumerate(libraries, start=1):
+        print(f"{i}. {library.title}")
+
+    selectedLibraries = input("Enter the numbers of default libraries to share (comma-separated, 'all' for all): ")
+    selectedLibraries = selectedLibraries.lower().split(',')
+
+    selectedStandardLibraries = []
+    selectedOptionalLibraries = []
+
+    if 'all' in selectedLibraries:
+        selectedStandardLibraries = [library.title for library in libraries]
+    else:
+        for selection in selectedLibraries:
+            try:
+                selection = int(selection.strip())
+                libraryTitle = libraries[selection - 1].title
+                selectedStandardLibraries.append(libraryTitle)
+            except (ValueError, IndexError):
+                logging.warning(f"Invalid selection: {selection}")
+
+    # Ask for optional libraries
+    optionalLibraries = input("Enter the numbers of optional (4k) libraries to share (comma-separated, 'none' for none): ")
+    optionalLibraries = optionalLibraries.lower().split(',')
+
+    if 'none' not in optionalLibraries:
+        for selection in optionalLibraries:
+            try:
+                selection = int(selection.strip())
+                libraryTitle = libraries[selection - 1].title
+                selectedOptionalLibraries.append(libraryTitle)
+            except (ValueError, IndexError):
+                logging.warning(f"Invalid selection: {selection}")
+
     config[formattedServerName].update({
-        'base_url': plex._baseurl,
+        'baseUrl': plex._baseurl,
         'token': plex._token,
-        'server_name': serverName
+        'serverName': serverName,
+        'standardLibraries': selectedStandardLibraries,
+        'optionalLibraries': selectedOptionalLibraries
     })
+
     with open(configFile, 'w') as config_file:
         yaml.dump(config, config_file)
-    logging.info(f"Authenticated and Stored token for Plex instance: {serverName}")
+
+    logging.info(f"Authenticated and stored token for Plex instance: {serverName}")
 
 
-def listPlexUsers(base_url, token, server_name):
-    plex = PlexServer(base_url, token)
+def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries):
+    plex = PlexServer(baseUrl, token)
     users = plex.myPlexAccount().users()
-    user_list = []
+    userList = []
+    standardLibraries = len(standardLibraries)
+    optionalLibraries = len(optionalLibraries)
 
     for user in users:
-        for server_info in user.servers:
-            if server_name == server_info.name:
-                user_info = {
+        for serverInfo in user.servers:
+            if serverName == serverInfo.name:
+                if optionalLibraries == 0:
+                    fourK = 'No'
+                elif serverInfo.numLibraries == standardLibraries + optionalLibraries:
+                    fourK = 'Yes'
+                elif serverInfo.numLibraries == standardLibraries:
+                    fourK = 'No'
+                elif serverInfo.numLibraries >= standardLibraries + optionalLibraries:
+                    fourK = 'Yes'
+                    logging.warning(f"{user.email} ({user.title}) has extra libraries shared to them; you should investigate.")
+                else:
+                    fourK = 'No'
+                    logging.warning(f"{user.email} ({user.title}) has not enough libraries shared to them; you should investigate")
+                userInfo = {
                     "User ID": user.id,
                     "Username": user.title,
                     "Email": user.email,
-                    "Server": server_name,
-                    "Number of Libraries": server_info.numLibraries,
-                    "All Libraries Shared": server_info.allLibraries
+                    "Server": serverName,
+                    "Number of Libraries": serverInfo.numLibraries,
+                    "All Libraries Shared": serverInfo.allLibraries,
+                    "4K Libraries": fourK
                 }
-                # Maybe i store the amount of shared libraries and if 4k is a thing
-                # Or I set a flag for 4K exists or if all libraries could be shared out?
-                print(user_info)
-                user_list.append(user_info)
+                userList.append(userInfo)
 
-    print(len(user_list))
-    return user_list
-
-
-    return user_list
+    return userList
 
 
 
