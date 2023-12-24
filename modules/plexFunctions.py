@@ -2,12 +2,8 @@
 import sys
 import logging
 import yaml
-import re
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
-from plexapi.library import MovieSection, ShowSection
-
-import modules.validateFuncations as validateFunctions
 import modules.configFunctions as configFunctions
 
 

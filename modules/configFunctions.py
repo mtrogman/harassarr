@@ -5,33 +5,28 @@ import mysql.connector
 import logging
 import sys
 import modules.dbFunctions as dbFunctions
-import modules.validateFuncations as validateFunctions
+import modules.validateFunctions as validateFunctions
+
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def getConfig(file):
-    with open(file, 'r') as yaml_file:
-        config = yaml.safe_load(yaml_file)
-    return config
+    try:
+        with open(file, 'r') as yaml_file:
+            config = yaml.safe_load(yaml_file) or {}
+        return config
+    except yaml.YAMLError as e:
+        logging.error(f"Error loading YAML from {file}: {e}")
+        return {}
 
 
 def checkConfig(configFile):
-    default_config = {
-        'database': {
-            'host': 'localhost',
-            'port': '3306',
-            'database': 'media_mgmt',
-            'user': 'lsql_harassarr',
-            'password': '',
-        }
-    }
-
     # Check if config file exists, if not, create it with an empty dictionary
     if not os.path.isfile(configFile):
         with open(configFile, 'w') as file:
-            yaml.dump(default_config, file)
+            yaml.dump({}, file)
         logging.info(f"{configFile} did not exist. Creating...")
         createDatabaseConfig(configFile)
     config = getConfig(configFile)
@@ -39,10 +34,7 @@ def checkConfig(configFile):
     # Check if 'database' key exists, if not, add it with default values
     if 'database' not in config:
         logging.info("Database configuration not found in config.yml.")
-        config.update(default_config)
-        with open(configFile, 'w') as file:
-            yaml.dump(config, file)
-        return False
+        createDatabaseConfig(configFile)
 
     required_keys = ['user', 'password', 'host', 'database', 'port']
 
@@ -53,25 +45,20 @@ def checkConfig(configFile):
             config['database'][key] = config['database'].get(key, '')
         with open(configFile, 'w') as file:
             yaml.dump(config, file)
-        uDBCresponse = updateDatabaseConfig(configFile)
-        if uDBCresponse:
-            return True
-        else:
-            return False
+        updateDatabaseConfig(configFile)
 
-    return True
 
 
 def createDatabaseConfig(configFile):
-    server = validateFunctions.get_validated_input("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-    port = int(validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
+    server = validateFunctions.getValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
+    port = int(validateFunctions.getValidatedInput("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
 
     if not validateFunctions.validateServer(server, port):
         while True:
             logging.error(
                 f"Could not connect to the database on port {port}. Please enter a valid IP address or hostname.")
-            server = validateFunctions.get_validated_input("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-            port = int(validateFunctions.get_validated_input("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
+            server = validateFunctions.getValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
+            port = int(validateFunctions.getValidatedInput("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
 
             if validateFunctions.validateServer(server, port):
                 break
@@ -98,22 +85,18 @@ def createDatabaseConfig(configFile):
     if createDBStructure:
         if createDBUser:
             config = getConfig(configFile)
+            if 'database' not in config:
+                config['database'] = {}
             config['database'].update({
                 'user': new_user,
                 'password': new_password,
                 'host': server,
                 'port': port,
-                'table': database
+                'database': database
             })
 
             with open(configFile, 'w') as config_file:
                 yaml.dump(config, config_file)
-
-            return True
-        else:
-            return False
-    else:
-        return False
 
 
 def updateDatabaseConfig(configFile):
@@ -130,8 +113,8 @@ def updateDatabaseConfig(configFile):
     if not validateFunctions.validateServer(server, port):
         while True:
             logging.error(f"Could not connect to the database on port 3306. Please enter a valid IP address or hostname.")
-            server = validateFunctions.get_validated_input("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-            port = validateFunctions.get_validated_input("Enter the port used by the database: ", r'^[0-9]+$')
+            server = validateFunctions.geValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
+            port = validateFunctions.geValidatedInput("Enter the port used by the database: ", r'^[0-9]+$')
 
             if validateFunctions.validateServer(server, port):
                 break

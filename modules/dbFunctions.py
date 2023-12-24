@@ -67,22 +67,24 @@ def createDBStructure(root_user, root_password, database, server):
         if not table_exists:
             # Define your table creation SQL statement
             create_table_query = """
-            CREATE TABLE `users` (
-                `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                `primaryEmail` VARCHAR(100) NULL DEFAULT '',
-                `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
-                `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
-                `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
-                `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
-                `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
-                `status` VARCHAR(10) NULL DEFAULT '',
-                `server` VARCHAR(25) NULL DEFAULT '',
-                `4k` VARCHAR(25) NULL DEFAULT '',
-                `paymentMethod` VARCHAR(25) NULL DEFAULT '',
-                `paymentPerson` VARCHAR(25) NULL DEFAULT '',
-                `joinDate` DATE DEFAULT CURRENT_DATE,
-                `endDate` DATE NULL DEFAULT NULL
-            ) COLLATE='utf8_bin';
+                CREATE TABLE `users` (
+                    `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    `primaryEmail` VARCHAR(100) NULL DEFAULT '',
+                    `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
+                    `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
+                    `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
+                    `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
+                    `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
+                    `status` VARCHAR(10) NULL DEFAULT '',
+                    `server` VARCHAR(25) NULL DEFAULT '',
+                    `4k` VARCHAR(25) NULL DEFAULT '',
+                    `paymentMethod` VARCHAR(25) NULL DEFAULT '',
+                    `paymentPerson` VARCHAR(25) NULL DEFAULT '',
+                    `PaidAmount` DECIMAL(10, 2) NULL DEFAULT NULL,
+                    `joinDate` DATE DEFAULT CURRENT_DATE,
+                    `startDate` DATE DEFAULT CURRENT_DATE,
+                    `endDate` DATE NULL DEFAULT NULL
+                ) COLLATE='utf8_bin';
             """
 
             # Execute the table creation query
@@ -121,32 +123,40 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
         connection = mysql.connector.connect(**db_config)
         cursor = connection.cursor()
 
-        # Read data from CSV file
-        with open(csvFilePath, 'r') as csv_file:
+        # Read data from CSV file with utf-8 encoding
+        with open(csvFilePath, 'r', encoding='utf-8') as csv_file:
             csv_reader = csv.DictReader(csv_file)
             for row in csv_reader:
-                # Convert date strings to datetime objects
-                startDate = datetime.strptime(row['Start'], '%m/%d/%Y').date()
-                endDate = datetime.strptime(row['End'], '%m/%d/%Y').date()
-                joinedDate = datetime.strptime(row['Joined'], '%m/%d/%Y').date()
+                # Convert date strings to datetime objects if they are not empty
+                start_date_str = row.get('startDate', '')
+                end_date_str = row.get('endDate', '')
+                joined_date_str = row.get('joinDate', '')
+
+                startDate = datetime.strptime(start_date_str, '%m/%d/%Y').date() if start_date_str else None
+                endDate = datetime.strptime(end_date_str, '%m/%d/%Y').date() if end_date_str else None
+                joinDate = datetime.strptime(joined_date_str, '%m/%d/%Y').date() if joined_date_str else None
 
                 # SQL query to insert data into the 'users' table
                 insert_query = """
-                    INSERT INTO users (PrimaryDiscord, SecondaryDiscord, PrimaryEmail, SecondaryEmail,
-                                      NotifyDiscord, NotifyEmail, Status, Server, 4K, PaidAmount,
-                                      Medium, Name, Start, End, Joined)
+                    INSERT INTO users (primaryDiscord, secondaryDiscord, primaryEmail, secondaryEmail,
+                                       notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
+                                       paymentMethod, paymentPerson, startDate, endDate, joinDate)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
 
                 # Data to be inserted
                 data = (
-                    row['PrimaryDiscord'], row['SecondaryDiscord'], row['PrimaryEmail'], row['SecondaryEmail'],
-                    row['NotifyDiscord'], row['NotifyEmail'], row['Status'], row['Server'], row['4K'],
-                    row['Paid Amount'], row['Medium'], row['Name'], startDate, endDate, joinedDate
+                    row.get('primaryDiscord', ''), row.get('secondaryDiscord', ''),
+                    row.get('primaryEmail', ''), row.get('secondaryEmail', ''),
+                    row.get('notifyDiscord', ''), row.get('notifyEmail', ''),
+                    row.get('status', ''), row.get('server', ''), row.get('4K', ''),
+                    row.get('paidAmount', ''), row.get('paymentMethod', ''),
+                    row.get('paymentPerson', ''), startDate, endDate, joinDate
                 )
 
                 # Execute the SQL query
                 cursor.execute(insert_query, data)
+                logging.info(f"User {row.get('primaryEmail', '')} imported successfully.")
 
         # Commit changes and close connection
         connection.commit()

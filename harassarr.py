@@ -3,10 +3,7 @@ import logging
 import sys
 import os
 import argparse
-import modules.dbFunctions as dbFunctions
-import modules.configFunctions as configFunctions
-import modules.plexFunctions as plexFunctions
-import modules.validateFuncations as validateFunctions
+from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 configFile = "./config/config.yml"
@@ -18,20 +15,15 @@ def main():
     args = parser.parse_args()
 
     # Validate Configuration is good
-    configCheck = configFunctions.checkConfig(configFile)
-    if configCheck:
-        logging.info(f"Database portion of configuration file (config.yml) looks good")
-        config = configFunctions.getConfig(configFile)
-        host = config['database']['host']
-        port = config['database']['port']
-        database = config['database']['database']
-        user = config['database']['user']
-        password = config['database']['password']
-        table = "users"
-    else:
-        #This should never happen but let's plan for weird stuff to occur.
-        logging.error(f"Configuration check has failed, please try again.")
-        exit(1)
+    configFunctions.checkConfig(configFile)
+    logging.info(f"Database portion of configuration file (config.yml) looks good")
+    config = configFunctions.getConfig(configFile)
+    host = config['database']['host']
+    port = config['database']['port']
+    database = config['database']['database']
+    user = config['database']['user']
+    password = config['database']['password']
+    table = "users"
 
     # Validate Connection to Database is good
     dbErrorFlag = False
