@@ -59,6 +59,7 @@ def main():
                 # Validate .csv file exists in that location
                 if os.path.exists(path) and path.lower().endswith('.csv'):
                     userInjection = dbFunctions.injectUsersFromCSV(user, password, host, database, path)
+                    break
                 else:
                     print("Invalid file path or file format. Please provide a valid path to a .csv file.")
 
