@@ -167,7 +167,6 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
         print(f"Error: {e}")
 
 
-
 def countDBUsers(user, password, server, database):
     # Database connection parameters
     db_config = {
@@ -198,3 +197,57 @@ def countDBUsers(user, password, server, database):
     except Exception as e:
         print(f"Error: {e}")
         return None
+
+
+def getDBUsers(user, password, server, database):
+    try:
+        cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
+        cursor = cnx.cursor()
+
+        # Example query to retrieve usernames from a 'users' table
+        query = "SELECT primaryEmail FROM users;"
+        cursor.execute(query)
+
+        # Fetch all usernames
+        db_users = [row[0] for row in cursor.fetchall()]
+
+        # Close the cursor and connection
+        cursor.close()
+        cnx.close()
+
+        return db_users
+
+    except mysql.connector.Error as err:
+        raise ValueError(f"Error retrieving users from the database: {err}")
+
+
+def userExists(user, password, server, database, primary_email, server_name):
+    try:
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=server,
+            user=user,
+            password=password,
+            database=database
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor()
+
+        # Query to check if the user exists in the database for the specific server
+        query = "SELECT * FROM users WHERE LOWER(primaryEmail) = %s AND LOWER(server) = %s"
+        cursor.execute(query, (primary_email.lower(), server_name.lower()))
+
+        # Fetch the result
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        # Return True if the user exists, False otherwise
+        return result is not None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error checking if user exists in the database: {e}")
+        return False

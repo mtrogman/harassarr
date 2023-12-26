@@ -8,6 +8,37 @@ from modules import dbFunctions, configFunctions, plexFunctions, validateFunctio
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 configFile = "./config/config.yml"
 
+# harassarr.py
+def checkPlexUsersNotInDatabase(configFile):
+    try:
+        # Load database configuration
+        db_config = configFunctions.getConfig(configFile)['database']
+
+        # Load Plex configuration
+        plex_config = configFunctions.getConfig(configFile)
+
+        # Validate database connection
+        if not validateFunctions.validateDBConnection(**db_config):
+            logging.error("Database connection failed. Please check your database configuration.")
+            return
+
+        # Get the list of users from the database
+        db_users = dbFunctions.getDBUsers(**db_config)
+
+        # Get the list of Plex users
+        plex_users = plexFunctions.listPlexUsers(**plex_config)
+
+        # Check for Plex users not in the database
+        for plex_user in plex_users:
+            if plex_user["Username"] not in db_users:
+                logging.warning(f"Plex user '{plex_user['Username']}' with email '{plex_user['Email']}' has access but is not in the database.")
+
+    except Exception as e:
+        logging.error(f"Error checking Plex users not in the database: {e}")
+
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Harassarr Script')
     parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
@@ -31,7 +62,7 @@ def main():
     if not serverValidation:
         logging.error(f"Server {host} is NOT listening on {port}")
         dbErrorFlag = True
-    databaseValidation = validateFunctions.validateDBConnection(user, password, host)
+    databaseValidation = validateFunctions.validateDBConnection(user, password, host, database)
     if not databaseValidation:
         logging.error(f"Unable to authenticated with {user} to {host}")
         dbErrorFlag = True
@@ -102,7 +133,8 @@ def main():
                 return
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
-            print(plexUserInfo)
+
+    checkPlexUsersNotInDatabase(configFile)
 
 if __name__ == "__main__":
     main()

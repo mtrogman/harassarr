@@ -85,7 +85,7 @@ def createPlexConfig(configFile):
     logging.info(f"Authenticated and stored token for Plex instance: {serverName}")
 
 
-def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries):
+def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries, **kwargs):
     plex = PlexServer(baseUrl, token)
     users = plex.myPlexAccount().users()
     userList = []
@@ -120,7 +120,27 @@ def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibrari
 
     return userList
 
+def removePlexUser(baseUrl, token, serverName, userEmail, sharedLibraries):
+    try:
+        plex = PlexServer(baseUrl, token)
+    except Exception as e:
+        logging.error(f"Error authenticating to Plex server '{serverName}': {e}")
+    try:
+        # Update user settings to remove all shared library sections
+        logging.info(f"REMOVE LIBRARY ACCESS TEMPORARLY DISABLED DURING TESTING")
+        # removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
+        # if removeLibraries:
+        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+    except Exception as e:
+        logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
 
+    try:
+        logging.info(f"REMOVE FRIEND TEMPORARLY DISABLED DURING TESTING")
+        # removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
+        # if removalFriend:
+        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+    except Exception as e:
+        logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
 
 
 

@@ -61,6 +61,39 @@ You can also set these variables via a configuration file:
 3. Rename the ``config.yml.example`` file in the path to ``config.yml``
 4. Complete the variables in ``config.yml``
 
+User import (CSV)
+primaryDiscord = String value, optional,  This is the discord user assoicated with the access
+secondaryDiscord = String value, optional,  This is the secondary discord user assoicated with the access
+primaryEmail = String value, required,  This is the email address plex has granted access to.
+secondaryEmail = String value, optional,  This is the secondary email address associated with the access (maybe someone manages access for them)
+notifyDiscord = This is who will get communication via discord.
+    Options: 
+        Primary = only primaryDiscord user will get communicated with
+        Secondary = only secondaryDiscord user will get communicated with
+        Both = both primary and secondary discord users will get communicated with
+        None = no discord communication will occur
+notifyEmail = This is who will get communication via email.
+    Options: 
+        Primary = only primaryEmail will get communicated with
+        Secondary = only secondaryEmail will get communicated with
+        Both = both primary and secondary email addresses will get communicated with
+        None = no email communication will occur
+status = 
+    Options:
+        Active = User has active shares
+        Inactive = User has no active shares
+server = String value, required, This is the friendly name of the plex server.
+4K = Optional libraries shared out to user (default for me is no 4K, so if you want 4K its another set of libraries shared out.)
+    Options:
+        Yes = Has access to 4K libraries
+        No = Does not have access to 4K libraries
+paidAmount = Integer, optional, This is the amount of $$$ this person has paid you (Total)
+paymentMethod = String, optional, This is how the user paid you (examples: PayPal, Venmo, CashApp, Cash)
+paymentPerson = String, optional, This is the name of the person who paid via paymentMethod (helps with tracking random payment in and tying it back to plex user)
+startDate = Date format (MM/DD/YYYY), This is when their service started.
+endDate = Date format (MM/DD/YYYY), This is when their service ends.
+joinDate = Date format (MM/DD/YYYY), This is their first start date (keep track of how long they have been a customer).
+
 # Development
 
 This bot is still a work in progress. If you have any ideas for improving or adding to harassarr, please open an issue

@@ -20,9 +20,9 @@ def validateServer(server, port):
         return False
 
 
-def validateDBConnection(user, password, server):
+def validateDBConnection(user, password, server, database):
     try:
-        cnx = mysql.connector.connect(user=user, password=password, host=server)
+        cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
         if cnx:
             cnx.close()
             return True
