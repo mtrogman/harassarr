@@ -99,10 +99,9 @@ You can also set these variables via a configuration file:
   - smtp_port: 587 (this is the default smtp port)
   - smtp_username: your_email@gmail.com
   -  smtp_password: your_email_password
-	
-    - NOTE YOU SHOULD NOT BE USING YOUR PASSWORD BUT RATHER SETUP AN APP PASSWORD!!!
-
-	https://support.google.com/accounts/answer/185833?visit_id=638392976627567214-395874003&p=InvalidSecondFactor&rd=1
+    
+NOTE YOU SHOULD NOT BE USING YOUR PASSWORD BUT RATHER SETUP AN APP PASSWORD!!!
+https://support.google.com/accounts/answer/185833?visit_id=638392976627567214-395874003&p=InvalidSecondFactor&rd=1
 
 # Development
 
