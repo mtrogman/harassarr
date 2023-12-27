@@ -8,8 +8,14 @@ database:
   port: 3306
   user: lsql_harassarr
 
-PLEX-XXXXXXXX:
-  serverName: XXXXXXXX
+email:
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  smtp_username: your_email@gmail.com
+  smtp_password: your_email_password
+
+PLEX-YYYYYYYYY:
+  serverName: YYYYYYYYY
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
   token: XXXXXXXX
   standardLibraries:

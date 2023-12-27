@@ -5,6 +5,8 @@ import yaml
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 import modules.configFunctions as configFunctions
+import modules.emailFunctions as emailFunctions
+import modules.dbFunctions as dbFunctions
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -120,28 +122,49 @@ def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibrari
 
     return userList
 
-def removePlexUser(baseUrl, token, serverName, userEmail, sharedLibraries):
+def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
+    # Load the YAML config using getConfig
+    config = configFunctions.getConfig(configFile)
+
     try:
+        # Retrieve the matching Plex configuration from config.yml
+        plex_config = config.get(f'PLEX-{serverName}', None)
+        if not isinstance(plex_config, dict):
+            logging.error(f"No configuration found for Plex server '{serverName}'")
+            return
+
+        # Get the actual configuration directly
+        baseUrl = plex_config.get('baseUrl', None)
+        token = plex_config.get('token', None)
+        if not baseUrl or not token:
+            logging.error(f"Invalid configuration for Plex server '{serverName}'")
+            return
+
+        # Authenticate to Plex
         plex = PlexServer(baseUrl, token)
     except Exception as e:
         logging.error(f"Error authenticating to Plex server '{serverName}': {e}")
+        return
+
     try:
         # Update user settings to remove all shared library sections
-        logging.info(f"REMOVE LIBRARY ACCESS TEMPORARLY DISABLED DURING TESTING")
+        logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
         # removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
         # if removeLibraries:
         #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+
+        # Update user status to 'Inactive'
+        # dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
+        emailFunctions.send_subscription_removed(configFile, userEmail)
+
     except Exception as e:
         logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
 
     try:
-        logging.info(f"REMOVE FRIEND TEMPORARLY DISABLED DURING TESTING")
+        logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
         # removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
         # if removalFriend:
         #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+
     except Exception as e:
         logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
-
-
-
-

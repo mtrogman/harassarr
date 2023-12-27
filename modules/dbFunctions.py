@@ -4,6 +4,7 @@ import csv
 import mysql.connector
 import logging
 from datetime import datetime
+import modules.configFunctions as configFunctions
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -251,3 +252,71 @@ def userExists(user, password, server, database, primary_email, server_name):
     except mysql.connector.Error as e:
         logging.error(f"Error checking if user exists in the database: {e}")
         return False
+
+
+def getUsersByStatus(user, password, host, database, status, server_name):
+    try:
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select users by status and server name
+        query = "SELECT * FROM users WHERE status = %s AND server = %s"
+        cursor.execute(query, (status, server_name))
+
+        # Fetch all users
+        users = cursor.fetchall()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return users
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting users by status: {e}")
+        return []
+
+
+def updateUserStatus(configFile, serverName, userEmail, new_status):
+    config = configFunctions.getConfig(configFile)
+    dbConfig = config.get('database', None)
+
+    try:
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor()
+
+        # Validate the new_status input
+        if new_status not in ('Active', 'Inactive'):
+            raise ValueError("Invalid status. Please provide 'Active' or 'Inactive'.")
+
+        # Update the user status
+        update_query = "UPDATE users SET status = %s WHERE primaryEmail = %s AND server = %s"
+        cursor.execute(update_query, (new_status, userEmail, serverName))
+
+        # Commit the changes
+        connection.commit()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        logging.info(f"User '{userEmail}' status updated to '{new_status}' for server '{serverName}'.")
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error updating user status: {e}")
