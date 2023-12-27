@@ -3,10 +3,13 @@ import logging
 import sys
 import os
 import argparse
-from datetime import datetime, timedelta
+import discord
+from discord.ext import commands
+from datetime import datetime
 import mysql.connector
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions
 
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 configFile = "./config/config.yml"
 
@@ -295,6 +298,9 @@ def main():
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile)
 
+    config = configFunctions.getConfig(configFile)
+    bot_token = config['bot']['token']
+    bot.run(bot_token)
 
 if __name__ == "__main__":
     main()
