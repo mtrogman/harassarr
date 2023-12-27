@@ -22,10 +22,9 @@ def validateServer(server, port):
 
 def validateDBConnection(user, password, server, database):
     try:
-        cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
-        if cnx:
-            cnx.close()
-            return True
+        with mysql.connector.connect(user=user, password=password, host=server, database=database) as cnx:
+            pass
+        return True
     except mysql.connector.Error as err:
         logging.error(f"Error: {err}")
         return False

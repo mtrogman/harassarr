@@ -200,7 +200,7 @@ def main():
 
     # Validate Configuration is good
     configFunctions.checkConfig(configFile)
-    logging.info(f"Database portion of configuration file (config.yml) looks good")
+    logging.info(f"Database configuration looks good")
     config = configFunctions.getConfig(configFile)
     host = config['database']['host']
     port = config['database']['port']
@@ -231,6 +231,8 @@ def main():
     # If unable to connect fully to the DB then force check/update values within config
     if dbErrorFlag:
         configFunctions.updateDatabaseConfig(configFile)
+    else:
+        logging.info(f"Sucessfully connected to database")
 
     # Check number of users in users table
     dbUsersCount = dbFunctions.countDBUsers(user, password, host, database)
@@ -263,8 +265,6 @@ def main():
 
 
     else:
-        logging.info("PLEX configuration(s) found in the config file (config.yml).")
-
         for config in plexConfigurations:
             baseUrl = config.get("baseUrl")
             token = config.get("token")

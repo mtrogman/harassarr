@@ -99,8 +99,8 @@ def updateDatabaseConfig(configFile):
     user = config['database'].get('user', '')
     password = config['database'].get('password', '')
 
-    server = validateFunctions.getValidatedInput(f"Confirm this is where the database is hosted (Current: {server}): ") or server
-    port = int(validateFunctions.getValidatedInput(f"Confirm this is the port used by the database (Current: {port}): ") or port)
+    server = validateFunctions.getValidatedInput(f"Confirm this is where the database is hosted (Current: {server}): ", r'^[a-zA-Z0-9.-]+$') or server
+    port = int(validateFunctions.getValidatedInput(f"Confirm this is the port used by the database (Current: {port}): ", r'^\d+$') or port)
 
     if not validateFunctions.validateServer(server, port):
         while True:
@@ -112,9 +112,9 @@ def updateDatabaseConfig(configFile):
                 break
 
     while True:
-        user = validateFunctions.getValidatedInput(f"Enter new user (current user is {user}): ") or user
-        password = validateFunctions.getValidatedInput(f"Enter new password (current password is {password}): ") or password
-        database = validateFunctions.getValidatedInput(f"Enter new database (current database is {database}): ") or database
+        user = input(f"Enter new user (current user is {user}): ") or user
+        password = input(f"Enter new password (current password is {password}): ") or password
+        database = validateFunctions.getValidatedInput(f"Enter new database (current database is {database}): ", r'^[a-zA-Z0-9.-]+$') or database
 
         try:
             cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)

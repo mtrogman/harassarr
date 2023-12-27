@@ -148,13 +148,11 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
 
     try:
         # Update user settings to remove all shared library sections
-        logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
-        # removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
-        # if removeLibraries:
-        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        # logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
+        removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
+        if removeLibraries:
+            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
-        # Update user status to 'Inactive'
-        # dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
 
         # Determine which email(s) to use based on notifyEmail value
         notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, userEmail)
@@ -176,10 +174,13 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
         logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
 
     try:
-        logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
-        # removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
-        # if removalFriend:
-        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        # logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
+        removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
+        if removalFriend:
+            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
     except Exception as e:
         logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
+
+    # Update user status to 'Inactive'
+    dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
