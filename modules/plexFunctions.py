@@ -155,7 +155,22 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
 
         # Update user status to 'Inactive'
         # dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
-        emailFunctions.send_subscription_removed(configFile, userEmail)
+
+        # Determine which email(s) to use based on notifyEmail value
+        notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, userEmail)
+        if notifyEmail == 'Primary':
+            toEmail = [dbFunctions.getPrimaryEmail(configFile, serverName, userEmail)]
+        elif notifyEmail == 'Secondary':
+            toEmail = [dbFunctions.getSecondaryEmail(configFile, serverName, userEmail)]
+        elif notifyEmail == 'Both':
+            primary_email = dbFunctions.getPrimaryEmail(configFile, serverName, userEmail)
+            secondary_email = dbFunctions.getSecondaryEmail(configFile, serverName, userEmail)
+            toEmail = [primary_email, secondary_email]
+        else:
+            # Don't send an email if notifyEmail is 'None'
+            toEmail = None
+
+        emailFunctions.send_subscription_removed(configFile, toEmail, userEmail)
 
     except Exception as e:
         logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")

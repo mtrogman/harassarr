@@ -320,3 +320,108 @@ def updateUserStatus(configFile, serverName, userEmail, new_status):
 
     except mysql.connector.Error as e:
         logging.error(f"Error updating user status: {e}")
+
+
+def getNotifyEmail(configFile, serverName, userEmail):
+    try:
+        # Load database configuration
+        db_config = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=db_config['host'],
+            user=db_config['user'],
+            password=db_config['password'],
+            database=db_config['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select notifyEmail for the given user on the specified server
+        query = "SELECT notifyEmail FROM users WHERE primaryEmail = %s AND server = %s"
+        cursor.execute(query, (userEmail, serverName))
+
+        # Fetch the notifyEmail value
+        result = cursor.fetchone()
+        notifyEmail = result['notifyEmail'] if result else None
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return notifyEmail
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting notifyEmail for user '{userEmail}' on server '{serverName}': {e}")
+        return None
+
+
+def getPrimaryEmail(configFile, serverName, userEmail):
+    try:
+        # Load database configuration
+        db_config = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=db_config['host'],
+            user=db_config['user'],
+            password=db_config['password'],
+            database=db_config['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select primaryEmail for the given user on the specified server
+        query = "SELECT primaryEmail FROM users WHERE primaryEmail = %s AND server = %s"
+        cursor.execute(query, (userEmail, serverName))
+
+        # Fetch the primaryEmail value
+        result = cursor.fetchone()
+        primaryEmail = result['primaryEmail'] if result else None
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return primaryEmail
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting primaryEmail for user '{userEmail}' on server '{serverName}': {e}")
+        return None
+
+
+def getSecondaryEmail(configFile, serverName, userEmail):
+    try:
+        # Load database configuration
+        db_config = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=db_config['host'],
+            user=db_config['user'],
+            password=db_config['password'],
+            database=db_config['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select secondaryEmail for the given user on the specified server
+        query = "SELECT secondaryEmail FROM users WHERE primaryEmail = %s AND server = %s"
+        cursor.execute(query, (userEmail, serverName))
+
+        # Fetch the secondaryEmail value
+        result = cursor.fetchone()
+        secondaryEmail = result['secondaryEmail'] if result else None
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return secondaryEmail
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting secondaryEmail for user '{userEmail}' on server '{serverName}': {e}")
+        return None

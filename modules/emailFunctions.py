@@ -1,18 +1,14 @@
 # emailFunctions.py
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import logging
-import sys
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
 import modules.configFunctions as configFunctions
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def send_email(configFile, subject, body, to_email):
+def send_email(configFile, subject, body, to_emails):
     # Retrieve the email configuration from the config file
     config = configFunctions.getConfig(configFile)
-
-    email_config = config.get('email', {})  # Use config directly, no need for getConfig again
+    email_config = config.get('email', {})
 
     # Extract email configuration values
     smtp_server = email_config.get('smtp_server', '')
@@ -27,7 +23,7 @@ def send_email(configFile, subject, body, to_email):
     # Create the email message
     msg = MIMEMultipart()
     msg['From'] = smtp_username
-    msg['To'] = to_email
+    msg['To'] = ', '.join(to_emails)  # Combine multiple emails into a comma-separated string
     msg['Subject'] = subject
 
     # Attach the body of the email
@@ -37,18 +33,16 @@ def send_email(configFile, subject, body, to_email):
     with smtplib.SMTP(smtp_server, smtp_port) as server:
         server.starttls()
         server.login(smtp_username, smtp_password)
-        server.sendmail(smtp_username, to_email, msg.as_string())
-    logging.info(f"Sent email to {to_email}")
+        server.sendmail(smtp_username, to_emails, msg.as_string())
 
-
-def send_subscription_reminder(configFile, email, days_left):
+def send_subscription_reminder(configFile, toEmail, primaryEmail, days_left):
     subject = f"Subscription Reminder - {days_left} Days Left"
-    body = f"Hello,\n\nYour subscription is set to end in {days_left} days. Please contact Trog on Discord (https://discord.gg/jp68q5C3pr) or reply to this email if you would like to continue with the subscription.\n\nThanks,\nTrog"
+    body = f"Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription please reply to this email or contact Trog on Discord (https://discord.gg/jp68q5C3pr).\n\nBest regards,\nThe TrogPlex Team"
+    send_email(configFile, subject, body, toEmail)
 
-    send_email(configFile, subject, body, email)
 
-def send_subscription_removed(configFile, email):
-    subject = "Subscription Removed from Plex"
-    body = "Hello,\n\nYour subscription has been removed from Plex. Please contact Trog on Discord (https://discord.gg/jp68q5C3pr) or reply to this email if you would like to continue with the subscription.\n\nThanks,\nTrog"
+def send_subscription_removed(configFile, toEmail, primaryEmail):
+    subject = "Subscription Removed"
+    body = f"Dear User,\n\nYour subscription for email: {primaryEmail} has been removed from Trog's Plex. Please contact us if you wish to continue your subscription please reply to this email or contact Trog on Discord (https://discord.gg/jp68q5C3pr).\n\nBest regards,\nThe TrogPlex Team"
+    send_email(configFile, subject, body, toEmail)
 
-    send_email(configFile, subject, body, email)
