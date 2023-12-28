@@ -7,7 +7,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 import mysql.connector
-from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions
+from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -170,6 +170,7 @@ def checkUsersEndDate(configFile):
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
                         else:
                             logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {daysLeft} days left.")
+
                             # Determine which email(s) to use based on notifyEmail value
                             notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, primaryEmail)
                             if notifyEmail == 'Primary':
@@ -184,7 +185,21 @@ def checkUsersEndDate(configFile):
                                 # Don't send an email if notifyEmail is 'None'
                                 toEmail = None
 
-                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
+                            notifyDiscord = dbFunctions.getNotifyDiscord(configFile, serverName, primaryEmail)
+                            if notifyDiscord == 'Primary':
+                                toDiscord = [dbFunctions.getPrimaryDiscord(configFile, serverName, primaryEmail)]
+                            elif notifyDiscord == 'Secondary':
+                                toDiscord = [dbFunctions.getSecondaryDiscord(configFile, serverName, primaryEmail)]
+                            elif notifyDiscord == 'Both':
+                                primaryDiscord = dbFunctions.getPrimaryDiscord(configFile, serverName, primaryEmail)
+                                secondaryDiscord = dbFunctions.getSecondaryDiscord(configFile, serverName, primaryEmail)
+                                toDiscord = [primaryDiscord, secondaryDiscord]
+                            else:
+                                # Don't send an email if notifyEmail is 'None'
+                                toDiscord = None
+
+                            # emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
+                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
 
         # Close the cursor and connection
         cursor.close()
@@ -297,9 +312,6 @@ def main():
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile)
 
-    # config = configFunctions.getConfig(configFile)
-    # bot_token = config['bot']['token']
-    # bot.run(bot_token)
 
-if _name__ == "__main__":
+if __name__ == "__main__":
     main()

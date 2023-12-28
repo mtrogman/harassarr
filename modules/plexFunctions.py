@@ -6,6 +6,7 @@ from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 import modules.configFunctions as configFunctions
 import modules.emailFunctions as emailFunctions
+import modules.discordFunctions as discordFunctions
 import modules.dbFunctions as dbFunctions
 
 
@@ -168,7 +169,22 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
             # Don't send an email if notifyEmail is 'None'
             toEmail = None
 
+        notifyDiscord = dbFunctions.getNotifyDiscord(configFile, serverName, userEmail)
+        if notifyDiscord == 'Primary':
+            toDiscord = [dbFunctions.getPrimaryDiscord(configFile, serverName, userEmail)]
+        elif notifyDiscord == 'Secondary':
+            toDiscord = [dbFunctions.getSecondaryDiscord(configFile, serverName, userEmail)]
+        elif notifyDiscord == 'Both':
+            primaryDiscord = dbFunctions.getPrimaryDiscord(configFile, serverName, userEmail)
+            secondaryDiscord = dbFunctions.getSecondaryDiscord(configFile, serverName, userEmail)
+            toDiscord = [primaryDiscord, secondaryDiscord]
+        else:
+            # Don't send an email if notifyEmail is 'None'
+            toDiscord = None
+
         emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
+        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
+
 
     except Exception as e:
         logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
@@ -178,6 +194,8 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
         # removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
         # if removalFriend:
         #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        # else:
+        #     logging.warning(f"Friendship with '{userEmail}' not found and thus not removed.")
 
     except Exception as e:
         logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")

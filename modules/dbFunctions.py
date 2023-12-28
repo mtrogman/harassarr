@@ -425,3 +425,106 @@ def getSecondaryEmail(configFile, serverName, userEmail):
     except mysql.connector.Error as e:
         logging.error(f"Error getting secondaryEmail for user '{userEmail}' on server '{serverName}': {e}")
         return None
+
+
+def getNotifyDiscord(configFile, serverName, primaryEmail):
+    try:
+        # Load database configuration
+        dbConfig = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select notifyDiscord value for the given user
+        query = "SELECT notifyDiscord FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, primaryEmail))
+
+        # Fetch the notifyDiscord value
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return result['notifyDiscord'] if result else None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting notifyDiscord preference: {e}")
+        return None
+
+
+def getPrimaryDiscord(configFile, serverName, primaryEmail):
+    try:
+        # Load database configuration
+        dbConfig = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select primaryDiscord value for the given user
+        query = "SELECT primaryDiscord FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, primaryEmail))
+
+        # Fetch the primaryDiscord value
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return result['primaryDiscord'] if result else None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting primaryDiscord value: {e}")
+        return None
+
+
+def getSecondaryDiscord(configFile, serverName, primaryEmail):
+    try:
+        # Load database configuration
+        dbConfig = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select secondaryDiscord value for the given user
+        query = "SELECT secondaryDiscord FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, primaryEmail))
+
+        # Fetch the secondaryDiscord value
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return result['secondaryDiscord'] if result else None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting secondaryDiscord value: {e}")
+        return None
+
