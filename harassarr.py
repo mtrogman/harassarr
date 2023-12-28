@@ -165,12 +165,12 @@ def checkUsersEndDate(configFile):
                     # Log information about the user
                     if daysLeft < 8:
                         # Check if endDate is in the past
+                        logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {daysLeft} days left.")
+
                         if daysLeft < 0:
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
                         else:
-                            logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {daysLeft} days left.")
-
                             # Determine which email(s) to use based on notifyEmail value
                             notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, primaryEmail)
                             if notifyEmail == 'Primary':
@@ -199,7 +199,7 @@ def checkUsersEndDate(configFile):
                                 toDiscord = None
 
                             # emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
-                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
+                            # discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
 
         # Close the cursor and connection
         cursor.close()

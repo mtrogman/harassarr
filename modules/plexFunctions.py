@@ -182,8 +182,8 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
             # Don't send an email if notifyEmail is 'None'
             toDiscord = None
 
-        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
-        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
+        # emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
+        # discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
 
 
     except Exception as e:
