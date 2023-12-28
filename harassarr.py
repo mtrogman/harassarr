@@ -17,46 +17,46 @@ configFile = "./config/config.yml"
 def checkInactiveUsersOnPlex(configFile):
     try:
         # Load database configuration
-        db_config = configFunctions.getConfig(configFile)['database']
+        dbConfig = configFunctions.getConfig(configFile)['database']
 
         # Load Plex configurations
-        plex_configs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
+        plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
 
-        for plex_config_name in plex_configs:
-            plex_config = configFunctions.getConfig(configFile)[plex_config_name]
+        for plexConfigName in plexConfigs:
+            plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
 
             # Get Inactive users from the database for the specific server
-            inactive_users = dbFunctions.getUsersByStatus(
-                user=db_config['user'],
-                password=db_config['password'],
-                host=db_config['host'],
-                database=db_config['database'],
+            inactiveUsers = dbFunctions.getUsersByStatus(
+                user=dbConfig['user'],
+                password=dbConfig['password'],
+                host=dbConfig['host'],
+                database=dbConfig['database'],
                 status='Inactive',
-                server_name=plex_config['serverName']
+                serverName=plexConfig['serverName']
             )
 
             # Get the list of Plex users for the specific server
-            plex_users = plexFunctions.listPlexUsers(
-                baseUrl=plex_config['baseUrl'],
-                token=plex_config['token'],
-                serverName=plex_config['serverName'],
-                standardLibraries=plex_config['standardLibraries'],
-                optionalLibraries=plex_config['optionalLibraries']
+            plexUsers = plexFunctions.listPlexUsers(
+                baseUrl=plexConfig['baseUrl'],
+                token=plexConfig['token'],
+                serverName=plexConfig['serverName'],
+                standardLibraries=plexConfig['standardLibraries'],
+                optionalLibraries=plexConfig['optionalLibraries']
             )
 
             # Check for Inactive Plex users in the database
-            for user in inactive_users:
-                primary_email = user["primaryEmail"].lower()
+            for user in inactiveUsers:
+                primaryEmail = user["primaryEmail"].lower()
 
                 # Check if the user is still on the Plex server
-                if any(plex_user["Email"].lower() == primary_email for plex_user in plex_users):
+                if any(plexUser["Email"].lower() == primaryEmail for plexUser in plexUsers):
                     logging.warning(
-                        f"Inactive user '{primary_email}' on server '{plex_config['serverName']}' still has access to the Plex server."
+                        f"Inactive user '{primaryEmail}' on server '{plexConfig['serverName']}' still has access to the Plex server."
                     )
 
                     # Invoke removePlexUser
-                    shared_libraries = plex_config['standardLibraries'] + plex_config['optionalLibraries']
-                    plexFunctions.removePlexUser(configFile, plex_config['serverName'], primary_email, shared_libraries)
+                    sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
+                    plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail, sharedLibraries)
 
     except Exception as e:
         logging.error(f"Error checking inactive users on Plex server: {e}")
@@ -65,56 +65,56 @@ def checkInactiveUsersOnPlex(configFile):
 def checkPlexUsersNotInDatabase(configFile):
     try:
         # Load database configuration
-        db_config = configFunctions.getConfig(configFile)['database']
+        dbConfig = configFunctions.getConfig(configFile)['database']
 
         # Load Plex configurations
-        plex_configs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
+        plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
 
-        for plex_config_name in plex_configs:
-            plex_config = configFunctions.getConfig(configFile)[plex_config_name]
+        for plexConfigName in plexConfigs:
+            plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
 
             # Get the list of Plex users for the specific server
-            plex_users = plexFunctions.listPlexUsers(
-                baseUrl=plex_config['baseUrl'],
-                token=plex_config['token'],
-                serverName=plex_config['serverName'],
-                standardLibraries=plex_config['standardLibraries'],
-                optionalLibraries=plex_config['optionalLibraries']
+            plexUsers = plexFunctions.listPlexUsers(
+                baseUrl=plexConfig['baseUrl'],
+                token=plexConfig['token'],
+                serverName=plexConfig['serverName'],
+                standardLibraries=plexConfig['standardLibraries'],
+                optionalLibraries=plexConfig['optionalLibraries']
             )
 
             # Check for Plex users not in the database for the specific server
             # Check for Plex users not in the database for the specific server
-            for plex_user in plex_users:
-                primary_email = plex_user["Email"].lower()
-                server_name = plex_user["Server"]
+            for plexUser in plexUsers:
+                primaryEmail = plexUser["Email"].lower()
+                serverName = plexUser["Server"]
 
                 # Check if the user's server matches the Plex configuration server name
-                if plex_user["Server"].lower() == plex_config['serverName'].lower():
+                if plexUser["Server"].lower() == plexConfig['serverName'].lower():
                     # Check if the user is in the database
                     if not dbFunctions.userExists(
-                            user=db_config['user'],
-                            password=db_config['password'],
-                            server=db_config['host'],
-                            database=db_config['database'],
-                            primary_email=primary_email,
-                            server_name=server_name
+                            user=dbConfig['user'],
+                            password=dbConfig['password'],
+                            server=dbConfig['host'],
+                            database=dbConfig['database'],
+                            primaryEmail=primaryEmail,
+                            serverName=serverName
                     ):
                         logging.warning(
-                            f"Plex user '{plex_user['Username']}' with email '{plex_user['Email']}' on server '{plex_user['Server']}' has access but is not in the database.")
-                        sharedLibraries = plex_config['standardLibraries'] + plex_config['optionalLibraries']
+                            f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
+                        sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
                         # Check if the user has status 'Inactive' in the database
                         if dbFunctions.getUserStatus(
-                                user=db_config['user'],
-                                password=db_config['password'],
-                                server=db_config['host'],
-                                database=db_config['database'],
-                                primary_email=primary_email,
-                                server_name=server_name
+                                user=dbConfig['user'],
+                                password=dbConfig['password'],
+                                server=dbConfig['host'],
+                                database=dbConfig['database'],
+                                primaryEmail=primaryEmail,
+                                serverName=serverName
                         ) == 'Inactive':
                             logging.warning(
-                                f"Plex user '{plex_user['Username']}' with email '{plex_user['Email']}' on server '{plex_user['Server']}' has status 'Inactive' but is still on the Plex server.")
-                            plexFunctions.removePlexUser(configFile, server_name, primary_email, sharedLibraries)
+                                f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
+                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
@@ -123,14 +123,14 @@ def checkPlexUsersNotInDatabase(configFile):
 def checkUsersEndDate(configFile):
     try:
         # Load database configuration
-        db_config = configFunctions.getConfig(configFile)['database']
+        dbConfig = configFunctions.getConfig(configFile)['database']
 
         # Connect to the database
         connection = mysql.connector.connect(
-            host=db_config['host'],
-            user=db_config['user'],
-            password=db_config['password'],
-            database=db_config['database']
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
         )
 
         # Create a cursor object
@@ -156,20 +156,20 @@ def checkUsersEndDate(configFile):
 
             # Check if endDate is within 7 days
             if endDate is not None:
-                days_left = (endDate - today).days
+                daysLeft = (endDate - today).days
                 # Retrieve the matching Plex configuration from config.yml
-                plex_config_key = f'PLEX-{serverName}'
-                plex_config = configFunctions.getConfig(configFile).get(plex_config_key, None)
+                plexConfigKey = f'PLEX-{serverName}'
+                plexConfig = configFunctions.getConfig(configFile).get(plexConfigKey, None)
 
-                if plex_config:
+                if plexConfig:
                     # Log information about the user
-                    if days_left < 8:
+                    if daysLeft < 8:
                         # Check if endDate is in the past
-                        if days_left < 0:
-                            sharedLibraries = plex_config['standardLibraries'] + plex_config['optionalLibraries']
+                        if daysLeft < 0:
+                            sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
                         else:
-                            logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {days_left} days left.")
+                            logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {daysLeft} days left.")
                             # Determine which email(s) to use based on notifyEmail value
                             notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, primaryEmail)
                             if notifyEmail == 'Primary':
@@ -177,14 +177,14 @@ def checkUsersEndDate(configFile):
                             elif notifyEmail == 'Secondary':
                                 toEmail = [dbFunctions.getSecondaryEmail(configFile, serverName, primaryEmail)]
                             elif notifyEmail == 'Both':
-                                primary_email = dbFunctions.getPrimaryEmail(configFile, serverName, primaryEmail)
-                                secondary_email = dbFunctions.getSecondaryEmail(configFile, serverName, primaryEmail)
-                                toEmail = [primary_email, secondary_email]
+                                primaryEmail = dbFunctions.getPrimaryEmail(configFile, serverName, primaryEmail)
+                                secondaryEmail = dbFunctions.getSecondaryEmail(configFile, serverName, primaryEmail)
+                                toEmail = [primaryEmail, secondaryEmail]
                             else:
                                 # Don't send an email if notifyEmail is 'None'
                                 toEmail = None
 
-                            emailFunctions.send_subscription_reminder(configFile, toEmail, primaryEmail, days_left)
+                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
 
         # Close the cursor and connection
         cursor.close()
@@ -200,11 +200,10 @@ def main():
     parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
 
     args = parser.parse_args()
-
+    config = configFunctions.getConfig(configFile)
     # Validate Configuration is good
     configFunctions.checkConfig(configFile)
     logging.info(f"Database configuration looks good")
-    config = configFunctions.getConfig(configFile)
     host = config['database']['host']
     port = config['database']['port']
     database = config['database']['database']
@@ -298,9 +297,9 @@ def main():
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile)
 
-    config = configFunctions.getConfig(configFile)
-    bot_token = config['bot']['token']
-    bot.run(bot_token)
+    # config = configFunctions.getConfig(configFile)
+    # bot_token = config['bot']['token']
+    # bot.run(bot_token)
 
-if __name__ == "__main__":
+if _name__ == "__main__":
     main()

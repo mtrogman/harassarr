@@ -67,23 +67,23 @@ def validateDBTable(user, password, server, database, table):
 
 
 def getValidatedInput(prompt, pattern):
-    user_input = input(prompt)
-    if user_input != '':
-        return validateInput(user_input, pattern)
+    userInput = input(prompt)
+    if userInput != '':
+        return validateInput(userInput, pattern)
     else:
         return None
 
 
-def validateInput(input_string, pattern):
-    while input_string is not None and not re.match(pattern, input_string):
+def validateInput(inputString, pattern):
+    while inputString is not None and not re.match(pattern, inputString):
         logging.warning("Invalid input. Please try again.")
-        input_string = input()
-    return input_string
+        inputString = input()
+    return inputString
 
 
-def validatePlex(base_url, token):
+def validatePlex(baseUrl, token):
     try:
-        plex = PlexServer(base_url, token)
+        plex = PlexServer(baseUrl, token)
         if plex:
             # Logged into plex
             return True
