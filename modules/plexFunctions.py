@@ -156,27 +156,27 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
 
 
         # Determine which email(s) to use based on notifyEmail value
-        notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, userEmail)
+        notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
         if notifyEmail == 'Primary':
-            toEmail = [dbFunctions.getPrimaryEmail(configFile, serverName, userEmail)]
+            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail)]
         elif notifyEmail == 'Secondary':
-            toEmail = [dbFunctions.getSecondaryEmail(configFile, serverName, userEmail)]
+            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail)]
         elif notifyEmail == 'Both':
-            primaryEmail = dbFunctions.getPrimaryEmail(configFile, serverName, userEmail)
-            secondaryEmail = dbFunctions.getSecondaryEmail(configFile, serverName, userEmail)
+            primaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
+            secondaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
             toEmail = [primaryEmail, secondaryEmail]
         else:
             # Don't send an email if notifyEmail is 'None'
             toEmail = None
 
-        notifyDiscord = dbFunctions.getNotifyDiscord(configFile, serverName, userEmail)
+        notifyDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
         if notifyDiscord == 'Primary':
-            toDiscord = [dbFunctions.getPrimaryDiscord(configFile, serverName, userEmail)]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail)]
         elif notifyDiscord == 'Secondary':
-            toDiscord = [dbFunctions.getSecondaryDiscord(configFile, serverName, userEmail)]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail)]
         elif notifyDiscord == 'Both':
-            primaryDiscord = dbFunctions.getPrimaryDiscord(configFile, serverName, userEmail)
-            secondaryDiscord = dbFunctions.getSecondaryDiscord(configFile, serverName, userEmail)
+            primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
+            secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
             toDiscord = [primaryDiscord, secondaryDiscord]
         else:
             # Don't send an email if notifyEmail is 'None'

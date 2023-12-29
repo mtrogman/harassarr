@@ -172,27 +172,27 @@ def checkUsersEndDate(configFile):
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
                         else:
                             # Determine which email(s) to use based on notifyEmail value
-                            notifyEmail = dbFunctions.getNotifyEmail(configFile, serverName, primaryEmail)
+                            notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
                             if notifyEmail == 'Primary':
-                                toEmail = [dbFunctions.getPrimaryEmail(configFile, serverName, primaryEmail)]
+                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
                             elif notifyEmail == 'Secondary':
-                                toEmail = [dbFunctions.getSecondaryEmail(configFile, serverName, primaryEmail)]
+                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
                             elif notifyEmail == 'Both':
-                                primaryEmail = dbFunctions.getPrimaryEmail(configFile, serverName, primaryEmail)
-                                secondaryEmail = dbFunctions.getSecondaryEmail(configFile, serverName, primaryEmail)
+                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
                                 toEmail = [primaryEmail, secondaryEmail]
                             else:
                                 # Don't send an email if notifyEmail is 'None'
                                 toEmail = None
 
-                            notifyDiscord = dbFunctions.getNotifyDiscord(configFile, serverName, primaryEmail)
+                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
                             if notifyDiscord == 'Primary':
-                                toDiscord = [dbFunctions.getPrimaryDiscord(configFile, serverName, primaryEmail)]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
                             elif notifyDiscord == 'Secondary':
-                                toDiscord = [dbFunctions.getSecondaryDiscord(configFile, serverName, primaryEmail)]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
                             elif notifyDiscord == 'Both':
-                                primaryDiscord = dbFunctions.getPrimaryDiscord(configFile, serverName, primaryEmail)
-                                secondaryDiscord = dbFunctions.getSecondaryDiscord(configFile, serverName, primaryEmail)
+                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
                                 toDiscord = [primaryDiscord, secondaryDiscord]
                             else:
                                 # Don't send an email if notifyEmail is 'None'
@@ -207,6 +207,13 @@ def checkUsersEndDate(configFile):
 
     except mysql.connector.Error as e:
         logging.error(f"Error checking users' endDate: {e}")
+
+
+
+
+
+
+
 
 
 
@@ -303,14 +310,14 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-    # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
-    checkPlexUsersNotInDatabase(configFile)
+    # # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
+    # checkPlexUsersNotInDatabase(configFile)
 
-    # See if anyone with an inactive status is still somehow on plex server
-    checkInactiveUsersOnPlex(configFile)
+    # # See if anyone with an inactive status is still somehow on plex server
+    # checkInactiveUsersOnPlex(configFile)
 
-    # Check for users with less than 7 days left or subscription has lapsed.
-    checkUsersEndDate(configFile)
+    # # Check for users with less than 7 days left or subscription has lapsed.
+    # checkUsersEndDate(configFile)
 
 
 if __name__ == "__main__":

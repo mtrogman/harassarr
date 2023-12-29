@@ -73,7 +73,9 @@ def createDBStructure(rootUser, rootPassword, database, server):
                     `primaryEmail` VARCHAR(100) NULL DEFAULT '',
                     `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
                     `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
+                    `primaryDiscordId` BIGINT(18) NULL DEFAULT NULL,
                     `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
+                    `secondaryDiscordId` BIGINT(18) NULL DEFAULT NULL,
                     `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
                     `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
                     `status` VARCHAR(10) NULL DEFAULT '',
@@ -322,7 +324,7 @@ def updateUserStatus(configFile, serverName, userEmail, newStatus):
         logging.error(f"Error updating user status: {e}")
 
 
-def getNotifyEmail(configFile, serverName, userEmail):
+def getDBField(configFile, serverName, userEmail, field):
     try:
         # Load database configuration
         dbConfig = configFunctions.getConfig(configFile)['database']
@@ -338,26 +340,25 @@ def getNotifyEmail(configFile, serverName, userEmail):
         # Create a cursor object
         cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
 
-        # Query to select notifyEmail for the given user on the specified server
-        query = "SELECT notifyEmail FROM users WHERE primaryEmail = %s AND server = %s"
-        cursor.execute(query, (userEmail, serverName))
+        # Query to select the specified field for the given user
+        query = f"SELECT {field} FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, userEmail))
 
-        # Fetch the notifyEmail value
+        # Fetch the field value
         result = cursor.fetchone()
-        notifyEmail = result['notifyEmail'] if result else None
 
         # Close the cursor and connection
         cursor.close()
         connection.close()
 
-        return notifyEmail
+        return result[field] if result else None
 
     except mysql.connector.Error as e:
-        logging.error(f"Error getting notifyEmail for user '{userEmail}' on server '{serverName}': {e}")
+        logging.error(f"Error getting {field} value: {e}")
         return None
+    
 
-
-def getPrimaryEmail(configFile, serverName, userEmail):
+def getAllFieldsForUser(configFile, serverName, userEmail):
     try:
         # Load database configuration
         dbConfig = configFunctions.getConfig(configFile)['database']
@@ -373,158 +374,19 @@ def getPrimaryEmail(configFile, serverName, userEmail):
         # Create a cursor object
         cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
 
-        # Query to select primaryEmail for the given user on the specified server
-        query = "SELECT primaryEmail FROM users WHERE primaryEmail = %s AND server = %s"
-        cursor.execute(query, (userEmail, serverName))
+        # Query to select all fields for the given user
+        query = "SELECT * FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, userEmail))
 
-        # Fetch the primaryEmail value
-        result = cursor.fetchone()
-        primaryEmail = result['primaryEmail'] if result else None
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return primaryEmail
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting primaryEmail for user '{userEmail}' on server '{serverName}': {e}")
-        return None
-
-
-def getSecondaryEmail(configFile, serverName, userEmail):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
-
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select secondaryEmail for the given user on the specified server
-        query = "SELECT secondaryEmail FROM users WHERE primaryEmail = %s AND server = %s"
-        cursor.execute(query, (userEmail, serverName))
-
-        # Fetch the secondaryEmail value
-        result = cursor.fetchone()
-        secondaryEmail = result['secondaryEmail'] if result else None
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return secondaryEmail
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting secondaryEmail for user '{userEmail}' on server '{serverName}': {e}")
-        return None
-
-
-def getNotifyDiscord(configFile, serverName, primaryEmail):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
-
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select notifyDiscord value for the given user
-        query = "SELECT notifyDiscord FROM users WHERE server = %s AND primaryEmail = %s"
-        cursor.execute(query, (serverName, primaryEmail))
-
-        # Fetch the notifyDiscord value
+        # Fetch the result
         result = cursor.fetchone()
 
         # Close the cursor and connection
         cursor.close()
         connection.close()
 
-        return result['notifyDiscord'] if result else None
+        return result if result else None
 
     except mysql.connector.Error as e:
-        logging.error(f"Error getting notifyDiscord preference: {e}")
+        logging.error(f"Error getting all fields for the user: {e}")
         return None
-
-
-def getPrimaryDiscord(configFile, serverName, primaryEmail):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
-
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select primaryDiscord value for the given user
-        query = "SELECT primaryDiscord FROM users WHERE server = %s AND primaryEmail = %s"
-        cursor.execute(query, (serverName, primaryEmail))
-
-        # Fetch the primaryDiscord value
-        result = cursor.fetchone()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return result['primaryDiscord'] if result else None
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting primaryDiscord value: {e}")
-        return None
-
-
-def getSecondaryDiscord(configFile, serverName, primaryEmail):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
-
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select secondaryDiscord value for the given user
-        query = "SELECT secondaryDiscord FROM users WHERE server = %s AND primaryEmail = %s"
-        cursor.execute(query, (serverName, primaryEmail))
-
-        # Fetch the secondaryDiscord value
-        result = cursor.fetchone()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return result['secondaryDiscord'] if result else None
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting secondaryDiscord value: {e}")
-        return None
-
