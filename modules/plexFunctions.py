@@ -149,40 +149,39 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
 
     try:
         # Update user settings to remove all shared library sections
-        logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
-        # removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
-        # if removeLibraries:
-        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
-
+        # logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
+        removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
+        if removeLibraries:
+            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
         # Determine which email(s) to use based on notifyEmail value
-        notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
+        notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyEmail')
         if notifyEmail == 'Primary':
-            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail)]
+            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryEmail')]
         elif notifyEmail == 'Secondary':
-            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail)]
+            toEmail = [dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryEmail')]
         elif notifyEmail == 'Both':
-            primaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
-            secondaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail)
+            primaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryEmail')
+            secondaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryEmail')
             toEmail = [primaryEmail, secondaryEmail]
         else:
             # Don't send an email if notifyEmail is 'None'
             toEmail = None
 
-        notifyDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
+        notifyDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyDiscord')
         if notifyDiscord == 'Primary':
-            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail)]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscord')]
         elif notifyDiscord == 'Secondary':
-            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail)]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscord')]
         elif notifyDiscord == 'Both':
-            primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
-            secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail)
+            primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscord')
+            secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscord')
             toDiscord = [primaryDiscord, secondaryDiscord]
         else:
-            # Don't send an email if notifyEmail is 'None'
+            # Don't send an email if notifyDiscord is 'None'
             toDiscord = None
 
-        # emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
+        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
         # discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
 
 
@@ -190,15 +189,15 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
         logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
 
     try:
-        logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
-        # removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
-        # if removalFriend:
-        #     logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
-        # else:
-        #     logging.warning(f"Friendship with '{userEmail}' not found and thus not removed.")
+        # logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
+        removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
+        if removalFriend:
+            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        else:
+            logging.warning(f"Friendship with '{userEmail}' not found and thus not removed.")
 
     except Exception as e:
         logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
 
     # Update user status to 'Inactive'
-    # dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
+    dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')

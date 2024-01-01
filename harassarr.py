@@ -112,8 +112,7 @@ def checkPlexUsersNotInDatabase(configFile):
                                 primaryEmail=primaryEmail,
                                 serverName=serverName
                         ) == 'Inactive':
-                            logging.warning(
-                                f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
+                            logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
 
     except Exception as e:
@@ -172,33 +171,33 @@ def checkUsersEndDate(configFile):
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
                         else:
                             # Determine which email(s) to use based on notifyEmail value
-                            notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                            notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyEmail')
                             if notifyEmail == 'Primary':
-                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
+                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')]
                             elif notifyEmail == 'Secondary':
-                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
+                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
                             elif notifyEmail == 'Both':
-                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
-                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryEmail')
+                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryEmail')
                                 toEmail = [primaryEmail, secondaryEmail]
                             else:
                                 # Don't send an email if notifyEmail is 'None'
                                 toEmail = None
 
-                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'notifyDiscord')
                             if notifyDiscord == 'Primary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscord')]
                             elif notifyDiscord == 'Secondary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail)]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscord')]
                             elif notifyDiscord == 'Both':
-                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
-                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail)
+                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryDiscord')
+                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryDiscord')
                                 toDiscord = [primaryDiscord, secondaryDiscord]
                             else:
-                                # Don't send an email if notifyEmail is 'None'
+                                # Don't send an email if notifyDiscord is 'None'
                                 toDiscord = None
 
-                            # emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
+                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
                             # discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
 
         # Close the cursor and connection
@@ -310,14 +309,14 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-    # # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
-    # checkPlexUsersNotInDatabase(configFile)
+    # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
+    checkPlexUsersNotInDatabase(configFile)
 
-    # # See if anyone with an inactive status is still somehow on plex server
-    # checkInactiveUsersOnPlex(configFile)
+    # See if anyone with an inactive status is still somehow on plex server
+    checkInactiveUsersOnPlex(configFile)
 
-    # # Check for users with less than 7 days left or subscription has lapsed.
-    # checkUsersEndDate(configFile)
+    # Check for users with less than 7 days left or subscription has lapsed.
+    checkUsersEndDate(configFile)
 
 
 if __name__ == "__main__":
