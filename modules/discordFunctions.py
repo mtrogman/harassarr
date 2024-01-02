@@ -56,17 +56,21 @@ def sendDiscordMessage(configFile, toUser, subject, body):
     bot.run(bot_token)
 
 
-def sendDiscordSubscriptionReminder(configFile, toUser, primaryEmail, daysLeft):
+def sendDiscordSubscriptionReminder(configFile, toUser, primaryEmail, daysLeft, dryrun):
     config = configFunctions.getConfig(configFile)
-    subject = getReminderSubject(config).format(days_left=daysLeft)
-    body = getReminderBody(config).format(primaryEmail=primaryEmail, days_left=daysLeft)
-    sendDiscordMessage(configFile, toUser, subject, body)
-    # logging.info(f"TEMP DISABLED DISCORD MESSAGES")
+    subject = getReminderSubject(config).format(daysLeft=daysLeft)
+    body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft)
+    if dryrun:
+        logging.info(f"DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
+    else:
+        sendDiscordMessage(configFile, toUser, subject, body)
 
 
-def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail):
+def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
     config = configFunctions.getConfig(configFile)
     subject = getRemovalSubject(config)
     body = getRemovalBody(config).format(primaryEmail=primaryEmail)
-    sendDiscordMessage(configFile, toUser, subject, body)
-    # logging.info(f"TEMP DISABLED DISCORD MESSAGES")
+    if dryrun:
+        logging.info(f"DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
+    else:
+        sendDiscordMessage(configFile, toUser, subject, body)

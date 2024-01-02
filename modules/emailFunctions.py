@@ -57,18 +57,22 @@ def sendEmail(configFile, subject, body, toEmails):
         server.sendmail(smtpUsername, toEmails, msg.as_string())
 
 
-def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft):
+def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, dryrun):
     config = configFunctions.getConfig(configFile)
     subject = getReminderSubject(config).format(daysLeft=daysLeft)
     body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft)
-    sendEmail(configFile, subject, body, toEmail)
-    # logging.info(f"TEMP DISABLED EMAILS")
+    if dryrun:
+        logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
+    else:
+        sendEmail(configFile, subject, body, toEmail)
 
 
-def sendSubscriptionRemoved(configFile, toEmail, primaryEmail):
+def sendSubscriptionRemoved(configFile, toEmail, primaryEmail, dryrun):
     config = configFunctions.getConfig(configFile)
     subject = getRemovalSubject(config)
     body = getRemovalBody(config).format(primaryEmail=primaryEmail)
-    sendEmail(configFile, subject, body, toEmail)
-    # logging.info(f"TEMP DISABLED EMAILS")
+    if dryrun:
+        logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
+    else:
+        sendEmail(configFile, subject, body, toEmail)
 

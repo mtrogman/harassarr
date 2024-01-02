@@ -175,7 +175,8 @@ def checkUsersEndDate(configFile, dryrun):
                             if notifyEmail == 'Primary':
                                 toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')]
                             elif notifyEmail == 'Secondary':
-                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
+                                toEmail = [
+                                    dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
                             elif notifyEmail == 'Both':
                                 primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryEmail')
                                 secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryEmail')
@@ -197,12 +198,8 @@ def checkUsersEndDate(configFile, dryrun):
                                 # Don't send an email if notifyDiscord is 'None'
                                 toDiscord = None
 
-                            # If --dryrun then skips this functionality
-                            if dryrun:
-                                logging.info(f"EMAIL and DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
-                            else:
-                                emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
-                                # discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
+                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, dryrun=dryrun)
+                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, dryrun=dryrun)
         # Close the cursor and connection
         cursor.close()
         connection.close()

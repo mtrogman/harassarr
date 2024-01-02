@@ -184,12 +184,9 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
             # Don't send an email if notifyDiscord is 'None'
             toDiscord = None
 
-        # If --dryrun then skips this functionality
-        if dryrun:
-            logging.info(f"EMAIL and DISCORD NOTIFICATION ({userEmail} SKIPPED DUE TO DRYRUN")
-        else:
-            emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
-            # discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
+
+        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail, dryrun=dryrun)
+        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail, dryrun=dryrun)
 
 
     except Exception as e:
