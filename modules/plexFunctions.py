@@ -123,7 +123,7 @@ def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibrari
 
     return userList
 
-def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
+def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
     # Load the YAML config using getConfig
     config = configFunctions.getConfig(configFile)
 
@@ -148,11 +148,14 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
         return
 
     try:
-        # Update user settings to remove all shared library sections
-        # logging.info(f"REMOVE LIBRARY ACCESS TEMPORARILY DISABLED DURING TESTING")
-        removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
-        if removeLibraries:
-            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        # If --dryrun then skips this functionality
+        if dryrun:
+            logging.info(f"REMOVE USER ({userEmail} SKIPPED DUE TO DRYRUN")
+        else:
+            # Update user settings to remove all shared library sections
+            removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
+            if removeLibraries:
+                logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
         # Determine which email(s) to use based on notifyEmail value
         notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyEmail')
@@ -181,8 +184,12 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
             # Don't send an email if notifyDiscord is 'None'
             toDiscord = None
 
-        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
-        # discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
+        # If --dryrun then skips this functionality
+        if dryrun:
+            logging.info(f"EMAIL and DISCORD NOTIFICATION ({userEmail} SKIPPED DUE TO DRYRUN")
+        else:
+            emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail)
+            # discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail)
 
 
     except Exception as e:
@@ -199,5 +206,9 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries):
     except Exception as e:
         logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
 
-    # Update user status to 'Inactive'
-    dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
+    # If --dryrun then skips this functionality
+    if dryrun:
+        logging.info(f"SETTING USER ({userEmail} TO INACTIVE SKIPPED DUE TO DRYRUN")
+    else:
+        # Update user status to 'Inactive'
+        dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')

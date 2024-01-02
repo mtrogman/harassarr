@@ -14,7 +14,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 configFile = "./config/config.yml"
 
 
-def checkInactiveUsersOnPlex(configFile):
+def checkInactiveUsersOnPlex(configFile, dryrun):
     try:
         # Load database configuration
         dbConfig = configFunctions.getConfig(configFile)['database']
@@ -56,13 +56,13 @@ def checkInactiveUsersOnPlex(configFile):
 
                     # Invoke removePlexUser
                     sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                    plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail, sharedLibraries)
+                    plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail, sharedLibraries, dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking inactive users on Plex server: {e}")
 
 
-def checkPlexUsersNotInDatabase(configFile):
+def checkPlexUsersNotInDatabase(configFile, dryrun):
     try:
         # Load database configuration
         dbConfig = configFunctions.getConfig(configFile)['database']
@@ -113,13 +113,13 @@ def checkPlexUsersNotInDatabase(configFile):
                                 serverName=serverName
                         ) == 'Inactive':
                             logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
+                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
 
 
-def checkUsersEndDate(configFile):
+def checkUsersEndDate(configFile, dryrun):
     try:
         # Load database configuration
         dbConfig = configFunctions.getConfig(configFile)['database']
@@ -197,9 +197,12 @@ def checkUsersEndDate(configFile):
                                 # Don't send an email if notifyDiscord is 'None'
                                 toDiscord = None
 
-                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
-                            # discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
-
+                            # If --dryrun then skips this functionality
+                            if dryrun:
+                                logging.info(f"EMAIL and DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
+                            else:
+                                emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft)
+                                # discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft)
         # Close the cursor and connection
         cursor.close()
         connection.close()
@@ -208,19 +211,14 @@ def checkUsersEndDate(configFile):
         logging.error(f"Error checking users' endDate: {e}")
 
 
-
-
-
-
-
-
-
-
 def main():
     parser = argparse.ArgumentParser(description='Harassarr Script')
     parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
+    parser.add_argument('--dryrun', action='store_true', help='Run in dry-run mode')
+
 
     args = parser.parse_args()
+    dryrun = args.dryrun
     config = configFunctions.getConfig(configFile)
     # Validate Configuration is good
     configFunctions.checkConfig(configFile)
@@ -309,14 +307,15 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
+
     # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
-    checkPlexUsersNotInDatabase(configFile)
+    checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
 
     # See if anyone with an inactive status is still somehow on plex server
-    checkInactiveUsersOnPlex(configFile)
+    checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
 
     # Check for users with less than 7 days left or subscription has lapsed.
-    checkUsersEndDate(configFile)
+    checkUsersEndDate(configFile, dryrun=dryrun)
 
 
 if __name__ == "__main__":

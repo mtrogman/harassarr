@@ -14,7 +14,7 @@ def getDiscordConfig(config):
 
 def getReminderSubject(config):
     discordConfig = getDiscordConfig(config)
-    return discordConfig.get('reminderSubject', "<YOUR NAME>'s Plex Subscription Reminder - {days_left} Days Left")
+    return discordConfig.get('reminderSubject', "<YOUR NAME>'s Plex Subscription Reminder - {daysLeft} Days Left")
 
 
 def getReminderBody(config):
