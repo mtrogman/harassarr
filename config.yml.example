@@ -1,5 +1,6 @@
 discord:
   token: PUT_DISCORD_BOT_TOKEN_HERE
+  guildId: PUT_YOUR_GUILD_ID_HERE
   reminderSubject: "<YOUR NAME>'s Plex Subscription Reminder - {days_left} Days Left"
   reminderBody: "Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
   removalSubject: "<YOUR NAME>'s Plex Subscription Ended"
@@ -7,7 +8,7 @@ discord:
 
 database:
   database: media_mgmt
-  host: XXXXXXXX
+  host: PUT_THE_IP_OR_HOSTNAME_OF_DATABASE-SERVER_HERE
   password: XXXXXXXX
   port: 3306
   user: lsql_harassarr
