@@ -3,8 +3,6 @@ import logging
 import discord
 from discord.ext import commands
 from discord import Embed
-import aiohttp
-import asyncio
 import modules.configFunctions as configFunctions
 
 
@@ -43,15 +41,21 @@ def sendDiscordMessage(configFile, toUser, subject, body):
 
     # Create a Bot instance with intents
     intents = discord.Intents.default()
-    intents.messages = True  # Add any other intents you need
+    intents.messages = True
     bot = commands.Bot(command_prefix='!', intents=intents)
 
     @bot.event
     async def on_ready():
         user = await bot.fetch_user(toUser[0])
         embed = Embed(title=f"**{subject}**", description=body, color=discord.Colour.blue())
-        await user.send(embed=embed)
-        await bot.close()
+        try:
+            await user.send(embed=embed)
+        except discord.errors.Forbidden as e:
+            logging.warning(f"Failed to send message to {user.name}#{user.discriminator}: {e}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred for {user.name}: {e}")
+        finally:
+            await bot.close()
 
     bot.run(bot_token)
 

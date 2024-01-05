@@ -173,12 +173,12 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
 
         notifyDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyDiscord')
         if notifyDiscord == 'Primary':
-            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscord')]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscordId')]
         elif notifyDiscord == 'Secondary':
-            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscord')]
+            toDiscord = [dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscordId')]
         elif notifyDiscord == 'Both':
-            primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscord')
-            secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscord')
+            primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscordId')
+            secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscordId')
             toDiscord = [primaryDiscord, secondaryDiscord]
         else:
             # Don't send an email if notifyDiscord is 'None'

@@ -73,9 +73,9 @@ def createDBStructure(rootUser, rootPassword, database, server):
                     `primaryEmail` VARCHAR(100) NULL DEFAULT '',
                     `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
                     `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
-                    `primaryDiscordId` BIGINT(18) NULL DEFAULT NULL,
+                    `primaryDiscordId` VARCHAR(25) NULL DEFAULT '',
                     `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
-                    `secondaryDiscordId` BIGINT(18) NULL DEFAULT NULL,
+                    `secondaryDiscordId` VARCHAR(25) NULL DEFAULT '',
                     `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
                     `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
                     `status` VARCHAR(10) NULL DEFAULT '',
@@ -142,18 +142,21 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
                 # SQL query to insert data into the 'users' table
                 insert_query = """
                     INSERT INTO users (primaryDiscord, secondaryDiscord, primaryEmail, secondaryEmail,
-                                       notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
-                                       paymentMethod, paymentPerson, startDate, endDate, joinDate)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                primaryDiscordId, secondaryDiscordId,
+                                notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
+                                paymentMethod, paymentPerson, startDate, endDate, joinDate)
+                    VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """
+
 
                 # Data to be inserted
                 data = (
                     row.get('primaryDiscord', ''), row.get('secondaryDiscord', ''),
                     row.get('primaryEmail', ''), row.get('secondaryEmail', ''),
+                    row.get('primaryDiscordId', ''), row.get('secondaryDiscordId', ''),
                     row.get('notifyDiscord', ''), row.get('notifyEmail', ''),
                     row.get('status', ''), row.get('server', ''), row.get('4K', ''),
-                    row.get('paidAmount', ''), row.get('paymentMethod', ''),
+                    row.get('paidAmount'), row.get('paymentMethod', ''),
                     row.get('paymentPerson', ''), startDate, endDate, joinDate
                 )
 

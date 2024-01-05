@@ -168,7 +168,7 @@ def checkUsersEndDate(configFile, dryrun):
 
                         if daysLeft < 0:
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries)
+                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
                         else:
                             # Determine which email(s) to use based on notifyEmail value
                             notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyEmail')
@@ -187,12 +187,12 @@ def checkUsersEndDate(configFile, dryrun):
 
                             notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'notifyDiscord')
                             if notifyDiscord == 'Primary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscord')]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscordId')]
                             elif notifyDiscord == 'Secondary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscord')]
+                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscordId')]
                             elif notifyDiscord == 'Both':
-                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryDiscord')
-                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryDiscord')
+                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryDiscordId')
+                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryDiscordId')
                                 toDiscord = [primaryDiscord, secondaryDiscord]
                             else:
                                 # Don't send an email if notifyDiscord is 'None'
@@ -266,7 +266,7 @@ def main():
                     break
                 else:
                     print("Invalid file path or file format. Please provide a valid path to a .csv file.")
-
+                    
     # Extract PLEX configurations
     plexConfigurations = [
         config[key] for key in config if key.startswith('PLEX-')
