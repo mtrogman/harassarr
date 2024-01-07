@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 import mysql.connector
+import asyncio
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
@@ -83,7 +84,6 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
             )
 
             # Check for Plex users not in the database for the specific server
-            # Check for Plex users not in the database for the specific server
             for plexUser in plexUsers:
                 primaryEmail = plexUser["Email"].lower()
                 serverName = plexUser["Server"]
@@ -99,8 +99,7 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
                             primaryEmail=primaryEmail,
                             serverName=serverName
                     ):
-                        logging.warning(
-                            f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
+                        logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
                         sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
                         # Check if the user has status 'Inactive' in the database
@@ -266,7 +265,6 @@ def main():
                     break
                 else:
                     print("Invalid file path or file format. Please provide a valid path to a .csv file.")
-                    
     # Extract PLEX configurations
     plexConfigurations = [
         config[key] for key in config if key.startswith('PLEX-')
@@ -304,7 +302,6 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-
     # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
     checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
 
@@ -313,7 +310,12 @@ def main():
 
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile, dryrun=dryrun)
-
+    # userData = await discordFunctions.getUserData(configFile)
+    # print("before harassarr print")
+    # print(userData)
+    # print("past harassarr print")
+    # exit(0)
 
 if __name__ == "__main__":
     main()
+    

@@ -27,6 +27,7 @@ PLEX-YYYYYYYYY:
   serverName: YYYYYYYYY
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
   token: XXXXXXXX
+  role: PUT_DISCORD_ROLE_HERE
   standardLibraries:
   - Movies
   - TV Shows
@@ -37,6 +38,7 @@ PLEX-XXXXXXXX:
   serverName: XXXXXXXX
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
   token: XXXXXXXX
+  role: PUT_DISCORD_ROLE_HERE
   standardLibraries:
   - Movies
   - TV Shows
