@@ -10,36 +10,47 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from modules import configFunctions
 from modules import discordFunctions
 
-configFile = "../config/config.yml"
+configFile = "./config/config.yml"
 config = configFunctions.getConfig(configFile)
-discord_config = discordFunctions.getDiscordConfig(config)
-botToken = discord_config.get('token', '')
+discordConfig = discordFunctions.getDiscordConfig(config)
+botToken = discordConfig.get('token', '')
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 # Define a command to export user information to CSV
-@bot.command(name='export_users')
-async def export_users(ctx):
+@bot.event
+async def on_ready():
     # Get all members from the server
-    members = ctx.guild.members
+    guildId = int(discordConfig.get('guildId', ''))
+    channelId = int(discordConfig.get('channelId', ''))
+    guild = bot.get_guild(guildId)
 
-    # Prepare CSV data
-    discordUsers = [['Discord Username', 'Discord User ID', 'Roles']]
+    if guild:
+        members = guild.members
 
-    # Iterate through members and add data to CSV
-    for member in members:
-        roles = ', '.join([role.name for role in member.roles if role.name != '@everyone'])
-        user_data = [member.name, member.id, roles]
-        discordUsers.append(user_data)
+        # Prepare CSV data
+        discordUsers = [['Discord Username', 'Discord User ID', 'Roles']]
 
-    # Write CSV data to a file
-    with open('user_data.csv', 'w', newline='') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerows(discordUsers)
+        # Iterate through members and add data to CSV
+        for member in members:
+            roles = ', '.join([role.name for role in member.roles if role.name != '@everyone'])
+            userData = [member.name, member.id, roles]
+            discordUsers.append(userData)
 
-    # Send the CSV file to the Discord channel
-    await ctx.send(file=discord.File('user_data.csv'))
-    await bot.close()
-    exit(0)
+        # Write CSV data to a file
+        with open('userData.csv', 'w', newline='') as csv_file:
+            csvWriter = csv.writer(csv_file)
+            csvWriter.writerows(discordUsers)
+
+        # Send the CSV file to the Discord channel
+        channel = guild.get_channel(channelId)
+
+        if channel:
+            await channel.send(file=discord.File('userData.csv'))
+        else:
+            print(f"Channel with ID {channelId} not found.")
+        await bot.close()
+    else:
+        print(f"Guild with ID {guildId} not found.")
 
 bot.run(botToken)

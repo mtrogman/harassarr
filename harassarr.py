@@ -7,12 +7,14 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 import mysql.connector
-import asyncio
+import subprocess
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 configFile = "./config/config.yml"
+userDataFile = "./userData.csv"
 
 
 def checkInactiveUsersOnPlex(configFile, dryrun):
@@ -302,19 +304,26 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-    # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
-    checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
+    # # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
+    # checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
+    #
+    # # See if anyone with an inactive status is still somehow on plex server
+    # checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
+    #
+    # # Check for users with less than 7 days left or subscription has lapsed.
+    # checkUsersEndDate(configFile, dryrun=dryrun)
 
-    # See if anyone with an inactive status is still somehow on plex server
-    checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
+    if os.path.exists(userDataFile):
+        os.remove(userDataFile)
+        print("Deleted existing userData.csv")
+    else:
+        logging.info(f"Cannot delete userData.csv due to it not existing")
+    subprocess.run(["python", "./Supplemental/userDetail.py"])
 
-    # Check for users with less than 7 days left or subscription has lapsed.
-    checkUsersEndDate(configFile, dryrun=dryrun)
-    # userData = await discordFunctions.getUserData(configFile)
-    # print("before harassarr print")
-    # print(userData)
-    # print("past harassarr print")
-    # exit(0)
+    if os.path.exists(userDataFile):
+        print("File there")
+    else:
+        raise FileNotFoundError(f"The file {userDataFile} does not exist.")
 
 if __name__ == "__main__":
     main()
