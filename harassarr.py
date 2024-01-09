@@ -304,26 +304,27 @@ def main():
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-    # # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
-    # checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
-    #
-    # # See if anyone with an inactive status is still somehow on plex server
-    # checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
-    #
-    # # Check for users with less than 7 days left or subscription has lapsed.
-    # checkUsersEndDate(configFile, dryrun=dryrun)
+    # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
+    checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
 
-    if os.path.exists(userDataFile):
-        os.remove(userDataFile)
-        print("Deleted existing userData.csv")
-    else:
-        logging.info(f"Cannot delete userData.csv due to it not existing")
-    subprocess.run(["python", "./Supplemental/userDetail.py"])
+    # See if anyone with an inactive status is still somehow on plex server
+    checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
 
-    if os.path.exists(userDataFile):
-        print("File there")
-    else:
-        raise FileNotFoundError(f"The file {userDataFile} does not exist.")
+    # Check for users with less than 7 days left or subscription has lapsed.
+    checkUsersEndDate(configFile, dryrun=dryrun)
+
+    # if os.path.exists(userDataFile):
+    #     os.remove(userDataFile)
+    #     print("Deleted existing userData.csv")
+    # else:
+    #     logging.info(f"Cannot delete userData.csv due to it not existing")
+    # subprocess.run(["python", "./Supplemental/userDetail.py"])
+    #
+    # if os.path.exists(userDataFile):
+    #     discordUserData  = discordFunctions.readCsv(userDataFile)
+    #
+    # else:
+    #     raise FileNotFoundError(f"The file {userDataFile} does not exist.")
 
 if __name__ == "__main__":
     main()

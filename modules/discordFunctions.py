@@ -1,6 +1,6 @@
 # discordFunctions.py
 import logging
-import asyncio
+import csv
 import discord
 from discord.ext import commands
 from discord import Embed
@@ -119,3 +119,17 @@ async def getUserData(configFile):
             return None
 
     bot.run(botToken)
+
+
+def readCsv(userDataFile):
+    users = []
+    with open(userDataFile, newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            # Assuming the CSV format is [Discord Name, Discord User ID, Roles]
+            users.append({
+                'name': row[0],
+                'discord_id': row[1],
+                'roles': [] if len(row) < 3 else [role.strip() for role in row[2].split(',')]
+            })
+    return users
