@@ -15,6 +15,8 @@ COPY config.* /config/
 
 # Copy source code from build machine to WORKDIR (/app) folder
 COPY *.py /app/
+COPY modules /app/
+COPY supplemental /app/
 
 # Delete unnecessary files in WORKDIR (/app) folder (not caught by .dockerignore)
 RUN echo "**** removing unneeded files ****"
