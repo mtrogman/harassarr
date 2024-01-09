@@ -4,34 +4,35 @@ import csv
 import mysql.connector
 import logging
 from datetime import datetime
+import modules.configFunctions as configFunctions
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def createDBUser(root_user, root_password, new_user, new_password, database, server):
+def createDBUser(rootUser, rootPassword, newUser, newPassword, database, server):
     try:
         # Connect to MySQL using the root user to check if the user already exists
-        cnx = mysql.connector.connect(user=root_user, password=root_password, host=server)
+        cnx = mysql.connector.connect(user=rootUser, password=rootPassword, host=server)
         cursor = cnx.cursor()
 
         # Check if the user already exists
-        cursor.execute(f"SELECT 1 FROM mysql.user WHERE user = '{new_user}' LIMIT 1;")
-        user_exists = cursor.fetchone()
+        cursor.execute(f"SELECT 1 FROM mysql.user WHERE user = '{newUser}' LIMIT 1;")
+        userExists = cursor.fetchone()
 
-        if user_exists:
+        if userExists:
             # User already exists, reset the password and update permissions
-            cursor.execute(f"SET PASSWORD FOR '{new_user}'@'%' = PASSWORD('{new_password}');")
-            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{new_user}'@'%';")
+            cursor.execute(f"SET PASSWORD FOR '{newUser}'@'%' = PASSWORD('{newPassword}');")
+            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{newUser}'@'%';")
             cursor.execute("FLUSH PRIVILEGES;")
-            logging.info(f"User '{new_user}' exists. Password reset and permissions updated.")
+            logging.info(f"User '{newUser}' exists. Password reset and permissions updated.")
 
         else:
             # User doesn't exist, create the new user with all privileges on the specified database
-            cursor.execute(f"CREATE USER '{new_user}'@'%' IDENTIFIED BY '{new_password}';")
-            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{new_user}'@'%';")
+            cursor.execute(f"CREATE USER '{newUser}'@'%' IDENTIFIED BY '{newPassword}';")
+            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{newUser}'@'%';")
             cursor.execute("FLUSH PRIVILEGES;")
-            logging.info(f"User '{new_user}' created with all privileges on database '{database}'.")
+            logging.info(f"User '{newUser}' created with all privileges on database '{database}'.")
 
     except mysql.connector.Error as err:
         logging.error("Database user creation or update failed.")
@@ -47,10 +48,10 @@ def createDBUser(root_user, root_password, new_user, new_password, database, ser
     return True  # Return success
 
 
-def createDBStructure(root_user, root_password, database, server):
+def createDBStructure(rootUser, rootPassword, database, server):
     try:
         # Connect to MySQL using the root user to create the new user
-        cnx = mysql.connector.connect(user=root_user, password=root_password, host=server)
+        cnx = mysql.connector.connect(user=rootUser, password=rootPassword, host=server)
         cursor = cnx.cursor()
 
         # Create the database if it doesn't exist
@@ -62,17 +63,19 @@ def createDBStructure(root_user, root_password, database, server):
 
         # Check if the table exists
         cursor.execute("SHOW TABLES LIKE 'users';")
-        table_exists = cursor.fetchone()
+        tableExists = cursor.fetchone()
 
-        if not table_exists:
+        if not tableExists:
             # Define your table creation SQL statement
-            create_table_query = """
+            createTableQuery = """
                 CREATE TABLE `users` (
                     `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                     `primaryEmail` VARCHAR(100) NULL DEFAULT '',
                     `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
                     `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
+                    `primaryDiscordId` VARCHAR(25) NULL DEFAULT '',
                     `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
+                    `secondaryDiscordId` VARCHAR(25) NULL DEFAULT '',
                     `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
                     `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
                     `status` VARCHAR(10) NULL DEFAULT '',
@@ -88,7 +91,7 @@ def createDBStructure(root_user, root_password, database, server):
             """
 
             # Execute the table creation query
-            cursor.execute(create_table_query)
+            cursor.execute(createTableQuery)
             logging.info("Table 'users' created.")
         else:
             logging.info("Table 'users' already exists.")
@@ -111,7 +114,7 @@ def createDBStructure(root_user, root_password, database, server):
 
 def injectUsersFromCSV(user, password, server, database, csvFilePath):
     # Database connection parameters
-    db_config = {
+    dbConfig = {
         'host': server,
         'user': user,
         'password': password,
@@ -120,37 +123,40 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
 
     try:
         # Open database connection
-        connection = mysql.connector.connect(**db_config)
+        connection = mysql.connector.connect(**dbConfig)
         cursor = connection.cursor()
 
         # Read data from CSV file with utf-8 encoding
-        with open(csvFilePath, 'r', encoding='utf-8') as csv_file:
-            csv_reader = csv.DictReader(csv_file)
-            for row in csv_reader:
+        with open(csvFilePath, 'r', encoding='utf-8') as csvFile:
+            csvReader = csv.DictReader(csvFile)
+            for row in csvReader:
                 # Convert date strings to datetime objects if they are not empty
-                start_date_str = row.get('startDate', '')
-                end_date_str = row.get('endDate', '')
-                joined_date_str = row.get('joinDate', '')
+                startDateStr = row.get('startDate', '')
+                endDateStr = row.get('endDate', '')
+                joinedDateStr = row.get('joinDate', '')
 
-                startDate = datetime.strptime(start_date_str, '%m/%d/%Y').date() if start_date_str else None
-                endDate = datetime.strptime(end_date_str, '%m/%d/%Y').date() if end_date_str else None
-                joinDate = datetime.strptime(joined_date_str, '%m/%d/%Y').date() if joined_date_str else None
+                startDate = datetime.strptime(startDateStr, '%m/%d/%Y').date() if startDateStr else None
+                endDate = datetime.strptime(endDateStr, '%m/%d/%Y').date() if endDateStr else None
+                joinDate = datetime.strptime(joinedDateStr, '%m/%d/%Y').date() if joinedDateStr else None
 
                 # SQL query to insert data into the 'users' table
                 insert_query = """
                     INSERT INTO users (primaryDiscord, secondaryDiscord, primaryEmail, secondaryEmail,
-                                       notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
-                                       paymentMethod, paymentPerson, startDate, endDate, joinDate)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                primaryDiscordId, secondaryDiscordId,
+                                notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
+                                paymentMethod, paymentPerson, startDate, endDate, joinDate)
+                    VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """
+
 
                 # Data to be inserted
                 data = (
                     row.get('primaryDiscord', ''), row.get('secondaryDiscord', ''),
                     row.get('primaryEmail', ''), row.get('secondaryEmail', ''),
+                    row.get('primaryDiscordId', ''), row.get('secondaryDiscordId', ''),
                     row.get('notifyDiscord', ''), row.get('notifyEmail', ''),
                     row.get('status', ''), row.get('server', ''), row.get('4K', ''),
-                    row.get('paidAmount', ''), row.get('paymentMethod', ''),
+                    row.get('paidAmount'), row.get('paymentMethod', ''),
                     row.get('paymentPerson', ''), startDate, endDate, joinDate
                 )
 
@@ -169,7 +175,7 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
 
 def countDBUsers(user, password, server, database):
     # Database connection parameters
-    db_config = {
+    dbConfig = {
         'host': server,
         'user': user,
         'password': password,
@@ -178,7 +184,7 @@ def countDBUsers(user, password, server, database):
 
     try:
         # Open database connection
-        connection = mysql.connector.connect(**db_config)
+        connection = mysql.connector.connect(**dbConfig)
         cursor = connection.cursor()
 
         # SQL query to count rows in the 'users' table
@@ -209,19 +215,19 @@ def getDBUsers(user, password, server, database):
         cursor.execute(query)
 
         # Fetch all usernames
-        db_users = [row[0] for row in cursor.fetchall()]
+        dbUsers = [row[0] for row in cursor.fetchall()]
 
         # Close the cursor and connection
         cursor.close()
         cnx.close()
 
-        return db_users
+        return dbUsers
 
     except mysql.connector.Error as err:
         raise ValueError(f"Error retrieving users from the database: {err}")
 
 
-def userExists(user, password, server, database, primary_email, server_name):
+def userExists(user, password, server, database, primaryEmail, serverName):
     try:
         # Connect to the database
         connection = mysql.connector.connect(
@@ -236,7 +242,7 @@ def userExists(user, password, server, database, primary_email, server_name):
 
         # Query to check if the user exists in the database for the specific server
         query = "SELECT * FROM users WHERE LOWER(primaryEmail) = %s AND LOWER(server) = %s"
-        cursor.execute(query, (primary_email.lower(), server_name.lower()))
+        cursor.execute(query, (primaryEmail.lower(), serverName.lower()))
 
         # Fetch the result
         result = cursor.fetchone()
@@ -251,3 +257,139 @@ def userExists(user, password, server, database, primary_email, server_name):
     except mysql.connector.Error as e:
         logging.error(f"Error checking if user exists in the database: {e}")
         return False
+
+
+def getUsersByStatus(user, password, host, database, status, serverName):
+    try:
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select users by status and server name
+        query = "SELECT * FROM users WHERE status = %s AND server = %s"
+        cursor.execute(query, (status, serverName))
+
+        # Fetch all users
+        users = cursor.fetchall()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return users
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting users by status: {e}")
+        return []
+
+
+def updateUserStatus(configFile, serverName, userEmail, newStatus):
+    config = configFunctions.getConfig(configFile)
+    dbConfig = config.get('database', None)
+
+    try:
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor()
+
+        # Validate the new_status input
+        if newStatus not in ('Active', 'Inactive'):
+            raise ValueError("Invalid status. Please provide 'Active' or 'Inactive'.")
+
+        # Update the user status
+        update_query = "UPDATE users SET status = %s WHERE primaryEmail = %s AND server = %s"
+        cursor.execute(update_query, (newStatus, userEmail, serverName))
+
+        # Commit the changes
+        connection.commit()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        logging.info(f"User '{userEmail}' status updated to '{newStatus}' for server '{serverName}'.")
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error updating user status: {e}")
+
+
+def getDBField(configFile, serverName, userEmail, field):
+    try:
+        # Load database configuration
+        dbConfig = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select the specified field for the given user
+        query = f"SELECT {field} FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, userEmail))
+
+        # Fetch the field value
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return result[field] if result else None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting {field} value: {e}")
+        return None
+    
+
+def getAllFieldsForUser(configFile, serverName, userEmail):
+    try:
+        # Load database configuration
+        dbConfig = configFunctions.getConfig(configFile)['database']
+
+        # Connect to the database
+        connection = mysql.connector.connect(
+            host=dbConfig['host'],
+            user=dbConfig['user'],
+            password=dbConfig['password'],
+            database=dbConfig['database']
+        )
+
+        # Create a cursor object
+        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+
+        # Query to select all fields for the given user
+        query = "SELECT * FROM users WHERE server = %s AND primaryEmail = %s"
+        cursor.execute(query, (serverName, userEmail))
+
+        # Fetch the result
+        result = cursor.fetchone()
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        return result if result else None
+
+    except mysql.connector.Error as e:
+        logging.error(f"Error getting all fields for the user: {e}")
+        return None

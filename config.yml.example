@@ -1,17 +1,34 @@
-bot:
+discord:
   token: PUT_DISCORD_BOT_TOKEN_HERE
+  guildId: PUT_YOUR_GUILD_ID_HERE
+  channelId: PUT_CHANNEL_WHERE_BOT_CAN_PRIVATELY_TALK_TO_YOU
+  reminderSubject: "<YOUR NAME>'s Plex Subscription Reminder - {days_left} Days Left"
+  reminderBody: "Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
+  removalSubject: "<YOUR NAME>'s Plex Subscription Ended"
+  removalBody: "Dear User,\n\nYour subscription for email: {primaryEmail} has ended on <YOUR NAME>'s Plex. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
 
 database:
   database: media_mgmt
-  host: XXXXXXXX
+  host: PUT_THE_IP_OR_HOSTNAME_OF_DATABASE-SERVER_HERE
   password: XXXXXXXX
   port: 3306
   user: lsql_harassarr
 
-PLEX-XXXXXXXX:
-  serverName: XXXXXXXX
+email:
+  smtpServer: smtp.gmail.com
+  smtpPport: 587
+  smtpUsername: your_email@gmail.com
+  smtpPassword: your_email_password
+  reminderSubject: "<YOUR NAME>'s Plex Subscription Reminder - {days_left} Days Left"
+  reminderBody: "Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
+  removalSubject: "<YOUR NAME>'s Plex Subscription Ended"
+  removalBody: "Dear User,\n\nYour subscription for email: {primaryEmail} has ended on <YOUR NAME>'s Plex. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
+
+PLEX-YYYYYYYYY:
+  serverName: YYYYYYYYY
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
   token: XXXXXXXX
+  role: PUT_DISCORD_ROLE_HERE
   standardLibraries:
   - Movies
   - TV Shows
@@ -22,6 +39,7 @@ PLEX-XXXXXXXX:
   serverName: XXXXXXXX
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
   token: XXXXXXXX
+  role: PUT_DISCORD_ROLE_HERE
   standardLibraries:
   - Movies
   - TV Shows
