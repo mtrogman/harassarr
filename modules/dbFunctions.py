@@ -273,8 +273,14 @@ def getUsersByStatus(user, password, host, database, status, serverName):
         cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
 
         # Query to select users by status and server name
-        query = "SELECT * FROM users WHERE status = %s AND server = %s"
-        cursor.execute(query, (status, serverName))
+        if serverName == "*":
+            # If serverName is "*", retrieve all users regardless of the server name
+            query = "SELECT * FROM users WHERE status = %s"
+            cursor.execute(query, (status,))
+        else:
+            # If a specific serverName is provided, include it in the query
+            query = "SELECT * FROM users WHERE status = %s AND server = %s"
+            cursor.execute(query, (status, serverName))
 
         # Fetch all users
         users = cursor.fetchall()
@@ -284,6 +290,10 @@ def getUsersByStatus(user, password, host, database, status, serverName):
         connection.close()
 
         return users
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
+
 
     except mysql.connector.Error as e:
         logging.error(f"Error getting users by status: {e}")

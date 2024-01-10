@@ -81,46 +81,6 @@ def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
         sendDiscordMessage(configFile, toUser, subject, body)
 
 
-async def getUserData(configFile):
-    config = configFunctions.getConfig(configFile)
-    discord_config = getDiscordConfig(config)
-    botToken = discord_config.get('token', '')
-
-    if not botToken:
-        logging.error("Discord bot token is missing in the configuration.")
-        return
-
-    # Create a Bot instance with intents
-    bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-
-    @bot.event
-    async def on_ready():
-        print("I am running on " + bot.user.name)
-        print("With the ID: " + bot.user.id)
-        print('Bot is ready to be used')
-        guildId = discord_config.get('guildId', '')
-        guild = bot.get_guild(int(guildId[-18:]))
-
-        if guild:
-            members = guild.members
-            userData = [['Discord Username', 'Discord User ID', 'Roles']]
-
-            # Iterate through members and add data to user_data
-            for member in members:
-                roles = ', '.join([role.name for role in member.roles if role.name != '@everyone'])
-                userInfo = [member.name, member.id, roles]
-                userData.append(userInfo)
-
-            print("At the end")
-            print(userData)
-            return userData
-        else:
-            print(f"Guild with ID {guildId} not found.")
-            return None
-
-    bot.run(botToken)
-
-
 def readCsv(userDataFile):
     users = []
     with open(userDataFile, newline='', encoding='utf-8') as csvfile:

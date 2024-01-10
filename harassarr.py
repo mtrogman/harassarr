@@ -17,6 +17,75 @@ configFile = "./config/config.yml"
 userDataFile = "./userData.csv"
 
 
+def checkInactiveUsersOnDiscord(configFile, dryrun):
+    # Janky way to get discord users... purge old csv, run subscript, validate csv there.
+    if os.path.exists(userDataFile):
+        os.remove(userDataFile)
+        logging.info(f"Deleted existing userData.csv")
+    else:
+        logging.info(f"Cannot delete userData.csv due to it not existing")
+
+    subprocess.run(["python", "./Supplemental/userDetail.py"])
+
+    if os.path.exists(userDataFile):
+        discordUserData = discordFunctions.readCsv(userDataFile)
+
+        try:
+            # Load database configuration
+            dbConfig = configFunctions.getConfig(configFile)['database']
+
+            # Load Plex configurations
+            plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
+
+            for plexConfigName in plexConfigs:
+                plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
+
+                # Get Inactive users from the database for the specific server
+                inactiveUsers = dbFunctions.getUsersByStatus(
+                    user=dbConfig['user'],
+                    password=dbConfig['password'],
+                    host=dbConfig['host'],
+                    database=dbConfig['database'],
+                    status='Inactive',
+                    serverName=plexConfig['serverName']
+                )
+
+                # Get Active users from the database for the specific server
+                activeUsers = dbFunctions.getUsersByStatus(
+                    user=dbConfig['user'],
+                    password=dbConfig['password'],
+                    host=dbConfig['host'],
+                    database=dbConfig['database'],
+                    status='Active',
+                    serverName=plexConfig['serverName']
+                )
+
+                # Check for Inactive Plex users in the database
+                for user in inactiveUsers:
+                    if 'primaryDiscordId' in user:
+                        primaryDiscordId = user["primaryDiscordId"]
+
+                        # Check if there is at least one active status for the primaryDiscordId
+                        active_status_exists = any(u.get('primaryDiscordId') == primaryDiscordId for u in activeUsers)
+
+                        if not active_status_exists:
+                            for user_data in discordUserData:
+                                if user_data.get('discord_id') == primaryDiscordId:
+                                    roles = user_data.get('roles')
+                                    # Check if any roles in the CSV match the Plex role
+                                    if plexConfig['role'].lower() in map(str.lower, roles):
+                                        logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
+                    else:
+                        logging.warning("Missing 'primaryDiscordId' key in user dictionary.")
+
+        except Exception as e:
+            logging.error(f"Error checking inactive users with Discord Roles: {e}")
+    else:
+        raise FileNotFoundError(f"The file {userDataFile} does not exist.")
+
+
+
+
 def checkInactiveUsersOnPlex(configFile, dryrun):
     try:
         # Load database configuration
@@ -306,25 +375,14 @@ def main():
 
     # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
     checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
-
+    
     # See if anyone with an inactive status is still somehow on plex server
     checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
-
+    
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile, dryrun=dryrun)
 
-    # if os.path.exists(userDataFile):
-    #     os.remove(userDataFile)
-    #     print("Deleted existing userData.csv")
-    # else:
-    #     logging.info(f"Cannot delete userData.csv due to it not existing")
-    # subprocess.run(["python", "./Supplemental/userDetail.py"])
-    #
-    # if os.path.exists(userDataFile):
-    #     discordUserData  = discordFunctions.readCsv(userDataFile)
-    #
-    # else:
-    #     raise FileNotFoundError(f"The file {userDataFile} does not exist.")
+    checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
 
 if __name__ == "__main__":
     main()
