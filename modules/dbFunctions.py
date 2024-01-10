@@ -80,10 +80,10 @@ def createDBStructure(rootUser, rootPassword, database, server):
                     `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
                     `status` VARCHAR(10) NULL DEFAULT '',
                     `server` VARCHAR(25) NULL DEFAULT '',
-                    `4k` VARCHAR(25) NULL DEFAULT '',
+                    `4k` ENUM('Yes', 'No'),
                     `paymentMethod` VARCHAR(25) NULL DEFAULT '',
                     `paymentPerson` VARCHAR(25) NULL DEFAULT '',
-                    `PaidAmount` DECIMAL(10, 2) NULL DEFAULT NULL,
+                    `paidAmount` DECIMAL(10, 2) NULL DEFAULT NULL,
                     `joinDate` DATE DEFAULT CURRENT_DATE,
                     `startDate` DATE DEFAULT CURRENT_DATE,
                     `endDate` DATE NULL DEFAULT NULL
@@ -155,7 +155,7 @@ def injectUsersFromCSV(user, password, server, database, csvFilePath):
                     row.get('primaryEmail', ''), row.get('secondaryEmail', ''),
                     row.get('primaryDiscordId', ''), row.get('secondaryDiscordId', ''),
                     row.get('notifyDiscord', ''), row.get('notifyEmail', ''),
-                    row.get('status', ''), row.get('server', ''), row.get('4K', ''),
+                    row.get('status', ''), row.get('server', ''), row.get('4k', ''),
                     row.get('paidAmount'), row.get('paymentMethod', ''),
                     row.get('paymentPerson', ''), startDate, endDate, joinDate
                 )

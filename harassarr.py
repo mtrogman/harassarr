@@ -217,9 +217,9 @@ def main():
 
     args = parser.parse_args()
     dryrun = args.dryrun
-    config = configFunctions.getConfig(configFile)
     # Validate Configuration is good
     configFunctions.checkConfig(configFile)
+    config = configFunctions.getConfig(configFile)
     logging.info(f"Database configuration looks good")
     host = config['database']['host']
     port = config['database']['port']
