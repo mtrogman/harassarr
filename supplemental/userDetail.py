@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from modules import configFunctions
 from modules import discordFunctions
 
-configFile = "./config/config.yml"
+configFile = "/config/config.yml"
+userDataFile = "/config/userData.csv"
 config = configFunctions.getConfig(configFile)
 discordConfig = discordFunctions.getDiscordConfig(config)
 botToken = discordConfig.get('token', '')
@@ -38,7 +39,7 @@ async def on_ready():
             discordUsers.append(userData)
 
         # Write CSV data to a file
-        with open('userData.csv', 'w', newline='') as csv_file:
+        with open(userDataFile, 'w', newline='') as csv_file:
             csvWriter = csv.writer(csv_file)
             csvWriter.writerows(discordUsers)
         await bot.close()
