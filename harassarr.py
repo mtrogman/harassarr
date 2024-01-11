@@ -443,6 +443,7 @@ def main():
             print("Error: Invalid time format. Please use the format HH:MM.")
             exit(1)
     else:
+        logging.info(f"No TIME to run set, running now once.")
         dailyRun(args, dryrun=dryrun)
         exit(0)
 
