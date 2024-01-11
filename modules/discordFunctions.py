@@ -81,7 +81,7 @@ def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
         sendDiscordMessage(configFile, toUser, subject, body)
 
 
-def removeRole(configFile, discordUserId, roleName):
+def removeRole(configFile, discordUserId, roleName, dryrun):
     config = configFunctions.getConfig(configFile)
     discordConfig = getDiscordConfig(config)
     botToken = discordConfig.get('token', '')
@@ -110,8 +110,11 @@ def removeRole(configFile, discordUserId, roleName):
                 role = discord.utils.get(guild.roles, name=roleName)
 
                 if role:
-                    await member.remove_roles(role)
-                    logging.info(f"Removed role {roleName} from user {member.name} ({member.id})")
+                    if dryrun:
+                        logging.info(f"DISCORD ROLE REMOVAL {roleName} SKIPPED FOR {member.name} ({member.id} DUE TO DRYRUN")
+                    else:
+                        await member.remove_roles(role)
+                        logging.info(f"Removed role {roleName} from user {member.name} ({member.id})")
                 else:
                     logging.error(f"Role {roleName} not found")
             else:

@@ -62,24 +62,30 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
                     serverName=plexConfig['serverName']
                 )
 
+                if os.path.exists(userDataFile):
+                    discordUserData = discordFunctions.readCsv(userDataFile)
+
                 # Check for Inactive Plex users in the database
+                discordIds = ['primaryDiscordId', 'secondaryDiscordId']
                 for user in inactiveUsers:
-                    if 'primaryDiscordId' in user:
-                        primaryDiscordId = user["primaryDiscordId"]
+                    for discordId in discordIds:
+                        if discordId in user:
+                            DiscordID = user[discordId]
 
-                        # Check if there is at least one active status for the primaryDiscordId
-                        active_status_exists = any(u.get('primaryDiscordId') == primaryDiscordId for u in activeUsers)
+                            # Check if there is at least one active status for the primaryDiscordId
+                            active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
 
-                        if not active_status_exists:
-                            for user_data in discordUserData:
-                                if user_data.get('discord_id') == primaryDiscordId:
-                                    roles = user_data.get('roles')
-                                    # Check if any roles in the CSV match the Plex role
-                                    if plexConfig['role'].lower() in map(str.lower, roles):
-                                        logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                        discordFunctions.removeRole(configFile, primaryDiscordId, plexConfig['role'])
-                    else:
-                        logging.warning("Missing 'primaryDiscordId' key in user dictionary.")
+                            if not active_status_exists:
+                                for user_data in discordUserData:
+                                    if user_data.get('discord_id') == DiscordID:
+                                        roles = user_data.get('roles')
+                                        # Check if any roles in the CSV match the Plex role
+                                        if plexConfig['role'].lower() in map(str.lower, roles):
+                                            logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
+                                            discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
+                        else:
+                            logging.warning(f"Missing {discordId} key in user dictionary.")
+
 
         except Exception as e:
             logging.error(f"Error checking inactive users with Discord Roles: {e}")
@@ -249,21 +255,21 @@ def checkUsersEndDate(configFile, dryrun):
                                 toEmail = [
                                     dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
                             elif notifyEmail == 'Both':
-                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryEmail')
-                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryEmail')
+                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')
+                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')
                                 toEmail = [primaryEmail, secondaryEmail]
                             else:
                                 # Don't send an email if notifyEmail is 'None'
                                 toEmail = None
 
-                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'notifyDiscord')
+                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyDiscord')
                             if notifyDiscord == 'Primary':
                                 toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscordId')]
                             elif notifyDiscord == 'Secondary':
                                 toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscordId')]
                             elif notifyDiscord == 'Both':
-                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'primaryDiscordId')
-                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail,'secondaryDiscordId')
+                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscordId')
+                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscordId')
                                 toDiscord = [primaryDiscord, secondaryDiscord]
                             else:
                                 # Don't send an email if notifyDiscord is 'None'
@@ -271,6 +277,40 @@ def checkUsersEndDate(configFile, dryrun):
 
                             emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, dryrun=dryrun)
                             discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, dryrun=dryrun)
+
+                            discordIds = ['primaryDiscordId', 'secondaryDiscordId']
+
+                            # Get Active users from the database for the specific server
+                            activeUsers = dbFunctions.getUsersByStatus(
+                                user=dbConfig['user'],
+                                password=dbConfig['password'],
+                                host=dbConfig['host'],
+                                database=dbConfig['database'],
+                                status='Active',
+                                serverName=plexConfig['serverName']
+                            )
+
+                            if os.path.exists(userDataFile):
+                                discordUserData = discordFunctions.readCsv(userDataFile)
+
+                            for discordId in discordIds:
+                                if discordId in user:
+                                    DiscordID = user[discordId]
+
+                                    # Check if there is at least one active status for the primaryDiscordId
+                                    active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
+
+                                    if not active_status_exists:
+                                        for user_data in discordUserData:
+                                            if user_data.get('discord_id') == DiscordID:
+                                                roles = user_data.get('roles')
+                                                # Check if any roles in the CSV match the Plex role
+                                                if plexConfig['role'].lower() in map(str.lower, roles):
+                                                    logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
+                                                    discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
+                                else:
+                                    logging.warning(f"Missing {discordId} key in user dictionary.")
+
         # Close the cursor and connection
         cursor.close()
         connection.close()
@@ -370,10 +410,10 @@ def dailyRun(args, dryrun):
 
     # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
     checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
-    
+
     # See if anyone with an inactive status is still somehow on plex server
     checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
-    
+
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile, dryrun=dryrun)
 
