@@ -424,8 +424,13 @@ def dailyRun(args, dryrun):
 def main():
     parser = argparse.ArgumentParser(description='Harassarr Script')
     parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
-    parser.add_argument('--dryrun', action='store_true', help='Run in dry-run mode')
-    parser.add_argument('-time', metavar='time', type=str, help='Time that the script will run each day, use format HH:MM')
+
+    # Set default values based on environment variables
+    default_dryrun = os.getenv('DRYRUN', 'false').lower() == 'true'
+    default_time = os.getenv('TIME', None)
+
+    parser.add_argument('--dryrun', action='store_true', default=default_dryrun, help='Run in dry-run mode')
+    parser.add_argument('-time', metavar='time', type=str, default=default_time, help='Time that the script will run each day, use format HH:MM')
 
     args = parser.parse_args()
     dryrun = args.dryrun
