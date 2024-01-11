@@ -16,7 +16,7 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 configFile = "/config/config.yml"
-userDataFile = "/userData.csv"
+userDataFile = "/config/userData.csv"
 
 
 def checkInactiveUsersOnDiscord(configFile, dryrun):
