@@ -33,8 +33,8 @@ def getRemovalBody(config):
 
 def sendDiscordMessage(configFile, toUser, subject, body):
     config = configFunctions.getConfig(configFile)
-    discord_config = getDiscordConfig(config)
-    botToken = discord_config.get('token', '')
+    discordConfig = getDiscordConfig(config)
+    botToken = discordConfig.get('token', '')
 
     if not botToken:
         logging.error("Discord bot token is missing in the configuration.")
@@ -80,6 +80,48 @@ def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
     else:
         sendDiscordMessage(configFile, toUser, subject, body)
 
+
+def removeRole(configFile, discordUserId, roleName):
+    config = configFunctions.getConfig(configFile)
+    discordConfig = getDiscordConfig(config)
+    botToken = discordConfig.get('token', '')
+
+    if not botToken:
+        logging.error("Discord bot token is missing in the configuration.")
+        return
+
+    # Create a Bot instance with intents
+    intents = discord.Intents.default()
+    intents.messages = True
+    bot = commands.Bot(command_prefix='!', intents=intents)
+
+    @bot.event
+    async def on_ready():
+        user = await bot.fetch_user(discordUserId)
+        guildId = int(discordConfig.get('guildId', ''))
+
+        guild = bot.get_guild(guildId)
+
+        if user:
+            # Use fetch_member instead of get_member
+            member = await guild.fetch_member(user.id)
+
+            if member:
+                role = discord.utils.get(guild.roles, name=roleName)
+
+                if role:
+                    await member.remove_roles(role)
+                    logging.info(f"Removed role {roleName} from user {member.name} ({member.id})")
+                else:
+                    logging.error(f"Role {roleName} not found")
+            else:
+                logging.error(f"Member {discordUserId} not found in the guild")
+        else:
+            logging.error(f"User {discordUserId} not found")
+
+        await bot.close()
+
+    bot.run(botToken)
 
 def readCsv(userDataFile):
     users = []

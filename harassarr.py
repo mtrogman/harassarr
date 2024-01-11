@@ -2,6 +2,8 @@
 import logging
 import sys
 import os
+import schedule
+import time
 import argparse
 import discord
 from discord.ext import commands
@@ -75,6 +77,7 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
                                     # Check if any roles in the CSV match the Plex role
                                     if plexConfig['role'].lower() in map(str.lower, roles):
                                         logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
+                                        discordFunctions.removeRole(configFile, primaryDiscordId, plexConfig['role'])
                     else:
                         logging.warning("Missing 'primaryDiscordId' key in user dictionary.")
 
@@ -82,8 +85,6 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
             logging.error(f"Error checking inactive users with Discord Roles: {e}")
     else:
         raise FileNotFoundError(f"The file {userDataFile} does not exist.")
-
-
 
 
 def checkInactiveUsersOnPlex(configFile, dryrun):
@@ -278,14 +279,8 @@ def checkUsersEndDate(configFile, dryrun):
         logging.error(f"Error checking users' endDate: {e}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Harassarr Script')
-    parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
-    parser.add_argument('--dryrun', action='store_true', help='Run in dry-run mode')
-
-
-    args = parser.parse_args()
-    dryrun = args.dryrun
+def dailyRun(args, dryrun):
+    logging.info(f"Starting Daily Run")
     # Validate Configuration is good
     configFunctions.checkConfig(configFile)
     config = configFunctions.getConfig(configFile)
@@ -382,7 +377,42 @@ def main():
     # Check for users with less than 7 days left or subscription has lapsed.
     checkUsersEndDate(configFile, dryrun=dryrun)
 
+    # See if there are any sneaky people who should not have the discord role associated with plex access (and remove the role if they have it)
     checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Harassarr Script')
+    parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
+    parser.add_argument('--dryrun', action='store_true', help='Run in dry-run mode')
+    parser.add_argument('-time', metavar='time', type=str, help='Time that the script will run each day, use format HH:MM')
+
+    args = parser.parse_args()
+    dryrun = args.dryrun
+
+    if args.time:
+        try:
+            # Attempt to parse the time string
+            runTime = datetime.strptime(args.time, "%H:%M").time()
+        except ValueError:
+            print("Error: Invalid time format. Please use the format HH:MM.")
+            exit(1)
+    else:
+        # If the "time" argument is not provided, running adhoc once
+        dailyRun(args, dryrun=dryrun)
+        exit(0)
+
+    # Log the starting message
+    logging.info(f"Starting Daily Run at {runTime}")
+
+    # Schedule the script to run at the specified time
+    schedule.every().day.at(str(runTime)).do(dailyRun, args, dryrun=dryrun)
+
+    # Run the scheduled jobs
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
 
 if __name__ == "__main__":
     main()
