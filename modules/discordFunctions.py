@@ -33,8 +33,8 @@ def getRemovalBody(config):
 
 def sendDiscordMessage(configFile, toUser, subject, body):
     config = configFunctions.getConfig(configFile)
-    discord_config = getDiscordConfig(config)
-    botToken = discord_config.get('token', '')
+    discordConfig = getDiscordConfig(config)
+    botToken = discordConfig.get('token', '')
 
     if not botToken:
         logging.error("Discord bot token is missing in the configuration.")
@@ -81,45 +81,50 @@ def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
         sendDiscordMessage(configFile, toUser, subject, body)
 
 
-async def getUserData(configFile):
+def removeRole(configFile, discordUserId, roleName, dryrun):
     config = configFunctions.getConfig(configFile)
-    discord_config = getDiscordConfig(config)
-    botToken = discord_config.get('token', '')
+    discordConfig = getDiscordConfig(config)
+    botToken = discordConfig.get('token', '')
 
     if not botToken:
         logging.error("Discord bot token is missing in the configuration.")
         return
 
     # Create a Bot instance with intents
-    bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+    intents = discord.Intents.default()
+    intents.messages = True
+    bot = commands.Bot(command_prefix='!', intents=intents)
 
     @bot.event
     async def on_ready():
-        print("I am running on " + bot.user.name)
-        print("With the ID: " + bot.user.id)
-        print('Bot is ready to be used')
-        guildId = discord_config.get('guildId', '')
-        guild = bot.get_guild(int(guildId[-18:]))
+        user = await bot.fetch_user(discordUserId)
+        guildId = int(discordConfig.get('guildId', ''))
 
-        if guild:
-            members = guild.members
-            userData = [['Discord Username', 'Discord User ID', 'Roles']]
+        guild = bot.get_guild(guildId)
 
-            # Iterate through members and add data to user_data
-            for member in members:
-                roles = ', '.join([role.name for role in member.roles if role.name != '@everyone'])
-                userInfo = [member.name, member.id, roles]
-                userData.append(userInfo)
+        if user:
+            # Use fetch_member instead of get_member
+            member = await guild.fetch_member(user.id)
 
-            print("At the end")
-            print(userData)
-            return userData
+            if member:
+                role = discord.utils.get(guild.roles, name=roleName)
+
+                if role:
+                    if dryrun:
+                        logging.info(f"DISCORD ROLE REMOVAL {roleName} SKIPPED FOR {member.name} ({member.id} DUE TO DRYRUN")
+                    else:
+                        await member.remove_roles(role)
+                        logging.info(f"Removed role {roleName} from user {member.name} ({member.id})")
+                else:
+                    logging.error(f"Role {roleName} not found")
+            else:
+                logging.error(f"Member {discordUserId} not found in the guild")
         else:
-            print(f"Guild with ID {guildId} not found.")
-            return None
+            logging.error(f"User {discordUserId} not found")
+
+        await bot.close()
 
     bot.run(botToken)
-
 
 def readCsv(userDataFile):
     users = []

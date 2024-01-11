@@ -41,16 +41,6 @@ async def on_ready():
         with open('userData.csv', 'w', newline='') as csv_file:
             csvWriter = csv.writer(csv_file)
             csvWriter.writerows(discordUsers)
-
-        # Send the CSV file to the Discord channel
-        channel = guild.get_channel(channelId)
-
-        if channel:
-            await channel.send(file=discord.File('userData.csv'))
-        else:
-            print(f"Channel with ID {channelId} not found.")
         await bot.close()
-    else:
-        print(f"Guild with ID {guildId} not found.")
 
 bot.run(botToken)
