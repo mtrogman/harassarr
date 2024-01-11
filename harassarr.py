@@ -427,7 +427,7 @@ def main():
 
     # Set default values based on environment variables
     default_dryrun = os.getenv('DRYRUN', 'false').lower() == 'true'
-    default_time = os.getenv('TIME', None)
+    default_time = os.getenv('TIME', '')
 
     parser.add_argument('--dryrun', action='store_true', default=default_dryrun, help='Run in dry-run mode')
     parser.add_argument('-time', metavar='time', type=str, default=default_time, help='Time that the script will run each day, use format HH:MM')
@@ -443,7 +443,7 @@ def main():
             print("Error: Invalid time format. Please use the format HH:MM.")
             exit(1)
     else:
-        # If the "time" argument is not provided, running adhoc once
+        logging.info(f"No TIME to run set, running now once.")
         dailyRun(args, dryrun=dryrun)
         exit(0)
 
