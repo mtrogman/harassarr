@@ -27,7 +27,7 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
     else:
         logging.info(f"Cannot delete userData.csv due to it not existing")
 
-    subprocess.run(["python", "Supplemental/userDetail.py"])
+    subprocess.run(["python", "supplemental/userDetail.py"])
 
     if os.path.exists(userDataFile):
         discordUserData = discordFunctions.readCsv(userDataFile)
