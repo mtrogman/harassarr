@@ -19,7 +19,7 @@ A Discord bot to automate notifications to users on your media server that their
     
 # Features
 
-harassarr uses discord and email to notify (harass) users that their subscription is due for a renewal.  If the subscription lapses then the user will automatically be removed.    
+harassarr uses discord and email to notify (harass) users that their subscription is due for a renewal.  If the subscription lapses then the user will automatically be removed from plex and the discord role.    
 
 # Installation and setup
 
@@ -63,7 +63,9 @@ You can also set these variables via a configuration file:
 
 ### User import (CSV)
 - primaryDiscord = String value, optional,  This is the discord user assoicated with the access
+- primaryDiscordId = 16 Digit Discord User ID
 - secondaryDiscord = String value, optional,  This is the secondary discord user assoicated with the access
+- secondaryDiscordId = 16 Digit Discord User ID
 - primaryEmail = String value, required,  This is the email address plex has granted access to.
 - secondaryEmail = String value, optional,  This is the secondary email address associated with the access (maybe someone manages access for them)
 - notifyDiscord = This is who will get communication via discord.
@@ -98,7 +100,7 @@ You can also set these variables via a configuration file:
   - smtp_server: smtp.gmail.com (if using google this is smtp server)
   - smtp_port: 587 (this is the default smtp port)
   - smtp_username: your_email@gmail.com
-  -  smtp_password: your_email_password
+  - smtp_password: your_email_password
     
 NOTE YOU SHOULD NOT BE USING YOUR PASSWORD BUT RATHER SETUP AN APP PASSWORD!!!
 https://support.google.com/accounts/answer/185833?visit_id=638392976627567214-395874003&p=InvalidSecondFactor&rd=1
