@@ -13,7 +13,7 @@
     <Support>https://discord.gg/jZWZh5CS6c</Support>
     <Project>https://github.com/mtrogman/harassarr</Project>
     <Overview>harassarr is a discord bot that allows you to notify (cough... harass) users that their Plex/Emby/JellyFin subscription is almost up.</Overview>
-    <Category>Tools: MediaServer Status:Beta</Category>
+    <Category>Tools: MediaServer Status:Stable</Category>
     <Icon>https://raw.githubusercontent.com/mtrogman/harassarr/master/logo.png</Icon>
     <TemplateURL>https://raw.githubusercontent.com/mtrogman/unraid_templates/main/templates/harassarr.xml</TemplateURL>
     <Maintainer>
