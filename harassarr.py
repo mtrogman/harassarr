@@ -224,18 +224,37 @@ def checkUsersEndDate(configFile, dryrun):
 
         # Iterate through active users
         for user in users:
-            # Extract relevant information using column names
-            primaryEmail = user['primaryEmail']
-            primaryDiscord = user['primaryDiscord']
+            # Extract end date
             endDate = user['endDate']
-            serverName = user['server']
+
 
             # Check if endDate is within 7 days
             if endDate is not None:
+                # Extract user info
+                primaryEmail = user['primaryEmail']
+                primaryDiscord = user['primaryDiscord']
+                serverName = user['server']
+                fourk = user['4k']
+                try:
+                    streamCount = int(serverName[-1])
+                except ValueError:
+                    # Handle the case where the last character is not a number
+                    streamCount = None  # or any other default value you want to set
+
+
                 daysLeft = (endDate - today).days
                 # Retrieve the matching Plex configuration from config.yml
                 plexConfigKey = f'PLEX-{serverName}'
                 plexConfig = configFunctions.getConfig(configFile).get(plexConfigKey, None)
+                
+                is4kSubscribed = plexConfig.get('fourk', 'no') == 'yes'
+                pricing = plexConfig['4k' if is4kSubscribed else '1080']
+
+                # Set pricing values or None if they don't exist
+                oneM = pricing.get('1Month', None)
+                threeM = pricing.get('3Month', None)
+                sixM = pricing.get('6Month', None)
+                twelveM = pricing.get('12Month', None)
 
                 if plexConfig:
                     # Log information about the user
@@ -275,8 +294,8 @@ def checkUsersEndDate(configFile, dryrun):
                                 # Don't send an email if notifyDiscord is 'None'
                                 toDiscord = None
 
-                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, dryrun=dryrun)
-                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, dryrun=dryrun)
+                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
 
                             discordIds = ['primaryDiscordId', 'secondaryDiscordId']
 

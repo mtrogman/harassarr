@@ -184,9 +184,25 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
             # Don't send an email if notifyDiscord is 'None'
             toDiscord = None
 
+        streamCount = int(serverName[-1]) if serverName and serverName[-1].isdigit() else None
+        fourk = dbFunctions.getDBField(configFile, serverName, userEmail, '4k')
 
-        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail, dryrun=dryrun)
-        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail, dryrun=dryrun)
+        is4kSubscribed = plexConfig.get('fourk', 'no') == 'yes'
+        pricing = plexConfig['4k' if is4kSubscribed else '1080']
+
+        # Set pricing values or None if they don't exist
+        oneM = pricing.get('1Month', None)
+        threeM = pricing.get('3Month', None)
+        sixM = pricing.get('6Month', None)
+        twelveM = pricing.get('12Month', None)
+
+        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+
+
+    except Exception as e:
+        logging.error(f"Error removing user '{userEmail}' from Plex server '{serverName}': {e}")
+
 
 
     except Exception as e:
