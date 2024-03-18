@@ -181,14 +181,7 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
                         sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
                         # Check if the user has status 'Inactive' in the database
-                        if dbFunctions.getUserStatus(
-                                user=dbConfig['user'],
-                                password=dbConfig['password'],
-                                server=dbConfig['host'],
-                                database=dbConfig['database'],
-                                primaryEmail=primaryEmail,
-                                serverName=serverName
-                        ) == 'Inactive':
+                        if dbFunctions.getDBField(configFile=configFile, serverName=dbConfig['host'], userEmail=primaryEmail, field='status') == 'Inactive':
                             logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
                             plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
 
@@ -250,11 +243,9 @@ def checkUsersEndDate(configFile, dryrun):
                 plexConfigs = configFunctions.getConfig(configFile)
 
                 plexConfig = plexConfigs.get(plexConfigKey, None)
-                print(plexConfig)
 
                 is4kSubscribed = fourk.lower() == 'yes'
                 pricing = plexConfig.get('4k' if is4kSubscribed else '1080p', None)
-                print(pricing)
 
                 # Set pricing values or None if they don't exist
                 oneM = pricing.get('1Month', None)
@@ -318,23 +309,23 @@ def checkUsersEndDate(configFile, dryrun):
                             if os.path.exists(userDataFile):
                                 discordUserData = discordFunctions.readCsv(userDataFile)
 
-                            for discordId in discordIds:
-                                if discordId in user:
-                                    DiscordID = user[discordId]
+                                for discordId in discordIds:
+                                    if discordId in user:
+                                        DiscordID = user[discordId]
 
-                                    # Check if there is at least one active status for the primaryDiscordId
-                                    active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
+                                        # Check if there is at least one active status for the primaryDiscordId
+                                        active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
 
-                                    if not active_status_exists:
-                                        for user_data in discordUserData:
-                                            if user_data.get('discord_id') == DiscordID:
-                                                roles = user_data.get('roles')
-                                                # Check if any roles in the CSV match the Plex role
-                                                if plexConfig['role'].lower() in map(str.lower, roles):
-                                                    logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                                    discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
-                                else:
-                                    logging.warning(f"Missing {discordId} key in user dictionary.")
+                                        if not active_status_exists:
+                                            for user_data in discordUserData:
+                                                if user_data.get('discord_id') == DiscordID:
+                                                    roles = user_data.get('roles')
+                                                    # Check if any roles in the CSV match the Plex role
+                                                    if plexConfig['role'].lower() in map(str.lower, roles):
+                                                        logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
+                                                        discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
+                                    else:
+                                        logging.warning(f"Missing {discordId} key in user dictionary.")
 
         # Close the cursor and connection
         cursor.close()
