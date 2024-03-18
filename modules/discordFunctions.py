@@ -61,10 +61,11 @@ def sendDiscordMessage(configFile, toUser, subject, body):
     bot.run(botToken)
 
 
-def sendDiscordSubscriptionReminder(configFile, toUser, primaryEmail, daysLeft, dryrun):
+def sendDiscordSubscriptionReminder(configFile, toUser, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun):
     config = configFunctions.getConfig(configFile)
     subject = getReminderSubject(config).format(daysLeft=daysLeft)
-    body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft)
+    body = getReminderBody(config).format(
+        primaryEmail=primaryEmail, daysLeft=daysLeft, streamCount=streamCount, fourk=fourk, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM)
     if dryrun:
         logging.info(f"DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
     else:

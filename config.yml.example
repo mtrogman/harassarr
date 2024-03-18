@@ -34,6 +34,16 @@ PLEX-YYYYYYYYY:
   - TV Shows
   optionalLibraries:
   - Movies 4k
+  1080:
+    1Month: X.XX
+    3Month: X.XX
+    6Month: X.XX
+    12Month: X.XX
+  4k:
+    1Month: X.XX
+    3Month: X.XX
+    6Month: X.XX
+    12Month: X.XX
 
 PLEX-XXXXXXXX:
   serverName: XXXXXXXX
@@ -44,3 +54,13 @@ PLEX-XXXXXXXX:
   - Movies
   - TV Shows
   optionalLibraries: []
+  1080:
+    1Month: X.XX
+    3Month: X.XX
+    6Month: X.XX
+    12Month: X.XX
+  4k:
+    1Month: X.XX
+    3Month: X.XX
+    6Month: X.XX
+    12Month: X.XX

@@ -57,10 +57,10 @@ def sendEmail(configFile, subject, body, toEmails):
         server.sendmail(smtpUsername, toEmails, msg.as_string())
 
 
-def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, dryrun):
+def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun):
     config = configFunctions.getConfig(configFile)
     subject = getReminderSubject(config).format(daysLeft=daysLeft)
-    body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft)
+    body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft, streamCount=streamCount, fourk=fourk, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM)
     if dryrun:
         logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
     else:
