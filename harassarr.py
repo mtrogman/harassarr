@@ -235,20 +235,26 @@ def checkUsersEndDate(configFile, dryrun):
                 primaryDiscord = user['primaryDiscord']
                 serverName = user['server']
                 fourk = user['4k']
+
                 try:
                     streamCount = int(serverName[-1])
                 except ValueError:
                     # Handle the case where the last character is not a number
-                    streamCount = None  # or any other default value you want to set
+                    streamCount = 2  # or any other default value you want to set
 
 
                 daysLeft = (endDate - today).days
                 # Retrieve the matching Plex configuration from config.yml
                 plexConfigKey = f'PLEX-{serverName}'
-                plexConfig = configFunctions.getConfig(configFile).get(plexConfigKey, None)
-                
-                is4kSubscribed = plexConfig.get('fourk', 'no') == 'yes'
-                pricing = plexConfig['4k' if is4kSubscribed else '1080']
+                # Retrieve the matching Plex configuration from config.yml
+                plexConfigs = configFunctions.getConfig(configFile)
+
+                plexConfig = plexConfigs.get(plexConfigKey, None)
+                print(plexConfig)
+
+                is4kSubscribed = fourk.lower() == 'yes'
+                pricing = plexConfig.get('4k' if is4kSubscribed else '1080p', None)
+                print(pricing)
 
                 # Set pricing values or None if they don't exist
                 oneM = pricing.get('1Month', None)
