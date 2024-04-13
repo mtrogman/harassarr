@@ -7,7 +7,7 @@ import time
 import argparse
 import discord
 from discord.ext import commands
-from datetime import datetime
+from datetime import datetime, timedelta
 import mysql.connector
 import subprocess
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
@@ -41,16 +41,12 @@ def delete_old_logs(log_file, logRetention):
         for line in lines:
             log_date_str = line.split(' - ', 1)[0]
             log_date = datetime.strptime(log_date_str, '%Y-%m-%d %H:%M:%S,%f')
-            if datetime.now() - log_date < timedelta(days=logRetention):
+            if datetime.now() - log_date <= timedelta(days=logRetention):
                 file.write(line)
         file.truncate()
-        
+
 # Delete old log entries
 delete_old_logs(logFile, logRetention)
-
-configFile = "/config/config.yml"
-userDataFile = "/config/userData.csv"
-
 
 def checkInactiveUsersOnDiscord(configFile, dryrun):
     # Janky way to get discord users... purge old csv, run subscript, validate csv there.
