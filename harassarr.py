@@ -13,7 +13,40 @@ import subprocess
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+configFile = "/config/config.yml"
+userDataFile = "/config/userData.csv"
+
+# Set up logging to both console and file
+logFile = "/config/harassarr.log"
+
+# Check if the log file exists, create it if it doesn't
+if not os.path.exists(logFile):
+    open(logFile, 'w').close()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[
+    logging.StreamHandler(sys.stdout),
+    logging.FileHandler(logFile)
+])
+
+try:
+    logRetention = configFunctions.getConfig(configFile)['log']['retention']
+except KeyError:
+    logRetention = 90
+
+def delete_old_logs(log_file, logRetention):
+    with open(log_file, 'r+') as file:
+        lines = file.readlines()
+        file.seek(0)
+        for line in lines:
+            log_date_str = line.split(' - ', 1)[0]
+            log_date = datetime.strptime(log_date_str, '%Y-%m-%d %H:%M:%S,%f')
+            if datetime.now() - log_date < timedelta(days=logRetention):
+                file.write(line)
+        file.truncate()
+        
+# Delete old log entries
+delete_old_logs(logFile, logRetention)
 
 configFile = "/config/config.yml"
 userDataFile = "/config/userData.csv"

@@ -24,6 +24,9 @@ email:
   removalSubject: "<YOUR NAME>'s Plex Subscription Ended"
   removalBody: "Dear User,\n\nYour subscription for email: {primaryEmail} has ended on <YOUR NAME>'s Plex. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
 
+log:
+  retention: 90
+
 PLEX-YYYYYYYYY:
   serverName: YYYYYYYYY
   baseUrl: https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:32400
