@@ -153,7 +153,7 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
             logging.info(f"REMOVE USER ({userEmail} SKIPPED DUE TO DRYRUN")
         else:
             # Update user settings to remove all shared library sections
-            removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
+            removeLibraries = plex.myPlexAccount().removeFriend(userEmail)
             if removeLibraries:
                 logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
