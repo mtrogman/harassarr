@@ -27,6 +27,12 @@ def getRemovalBody(config):
 
 
 def sendEmail(configFile, subject, body, toEmails):
+    if not toEmails:
+        logging.error("No recipient specified.")
+        return
+    if not isinstance(toEmails, (list, tuple, set)):
+        toEmails = [toEmails]
+
     # Retrieve the email configuration from the config file
     config = configFunctions.getConfig(configFile)
     emailConfig = config.get('email', {})
