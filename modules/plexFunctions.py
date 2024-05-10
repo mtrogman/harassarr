@@ -1,7 +1,5 @@
 # plexFunctions.py
-import sys
-import logging
-import yaml
+import sys, logging, yaml
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 import modules.configFunctions as configFunctions
@@ -157,6 +155,9 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
             if removeLibraries:
                 logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
 
+    except Exception as e:
+        logging.error(f"Error removing user '{userEmail}' from Plex server '{serverName}': {e}")
+    
         # Determine which email(s) to use based on notifyEmail value
         notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyEmail')
         if notifyEmail == 'Primary':
@@ -195,18 +196,14 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
         threeM = pricing.get('3Month', None)
         sixM = pricing.get('6Month', None)
         twelveM = pricing.get('12Month', None)
-
+    try:
         emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
         discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
 
 
     except Exception as e:
-        logging.error(f"Error removing user '{userEmail}' from Plex server '{serverName}': {e}")
+        logging.error(f"Error notifying user '{userEmail}' from their subscription on Plex server '{serverName}': {e}")
 
-
-
-    except Exception as e:
-        logging.error(f"Error removing shared libraries from user '{userEmail}' from Plex server '{serverName}': {e}")
 
     try:
         # logging.info(f"REMOVE FRIEND TEMPORARILY DISABLED DURING TESTING")
