@@ -189,7 +189,7 @@ def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
         fourk = dbFunctions.getDBField(configFile, serverName, userEmail, '4k')
 
         is4kSubscribed = plexConfig.get('fourk', 'no') == 'yes'
-        pricing = plexConfig['4k' if is4kSubscribed else '1080']
+        pricing = plexConfig['4k' if is4kSubscribed else '1080p']
 
         # Set pricing values or None if they don't exist
         oneM = pricing.get('1Month', None)
