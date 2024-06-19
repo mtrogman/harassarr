@@ -1,4 +1,3 @@
-# emailFunctions.py
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,17 +8,21 @@ import modules.configFunctions as configFunctions
 def getEmailConfig(config):
     return config.get('email', {})
 
+
 def getReminderSubject(config):
     emailConfig = getEmailConfig(config)
     return emailConfig.get('reminderSubject', 'Subscription Reminder - {daysLeft} Days Left')
+
 
 def getReminderBody(config):
     emailConfig = getEmailConfig(config)
     return emailConfig.get('reminderBody', 'Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {daysLeft} days. Please contact us if you wish to continue your subscription by replying to this email.\n\nBest regards')
 
+
 def getRemovalSubject(config):
     emailConfig = getEmailConfig(config)
     return emailConfig.get('removalSubject', 'Subscription Removed')
+
 
 def getRemovalBody(config):
     emailConfig = getEmailConfig(config)
@@ -42,6 +45,10 @@ def sendEmail(configFile, subject, body, toEmails):
     smtpPort = emailConfig.get('smtpPort', 587)
     smtpUsername = emailConfig.get('smtpUsername', '')
     smtpPassword = emailConfig.get('smtpPassword', '')
+    smtpSendAs = emailConfig.get('smtpSendAs', None)
+
+    # Determine the from_email address
+    fromEmail = smtpSendAs if smtpSendAs else smtpUsername
 
     # Check if any required values are missing
     if not smtpServer or not smtpUsername or not smtpPassword:
@@ -49,7 +56,7 @@ def sendEmail(configFile, subject, body, toEmails):
 
     # Create the email message
     msg = MIMEMultipart()
-    msg['From'] = smtpUsername
+    msg['From'] = fromEmail
     msg['To'] = ', '.join(toEmails)  # Combine multiple emails into a comma-separated string
     msg['Subject'] = subject
 
@@ -60,7 +67,7 @@ def sendEmail(configFile, subject, body, toEmails):
     with smtplib.SMTP(smtpServer, smtpPort) as server:
         server.starttls()
         server.login(smtpUsername, smtpPassword)
-        server.sendmail(smtpUsername, toEmails, msg.as_string())
+        server.sendmail(fromEmail, toEmails, msg.as_string())
 
 
 def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun):
@@ -81,4 +88,3 @@ def sendSubscriptionRemoved(configFile, toEmail, primaryEmail, dryrun):
         logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
     else:
         sendEmail(configFile, subject, body, toEmail)
-
