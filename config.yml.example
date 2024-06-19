@@ -19,6 +19,7 @@ email:
   smtpPport: 587
   smtpUsername: your_email@gmail.com
   smtpPassword: your_email_password
+  smtpSendAs: your_send_as_email@custom_domain.com  # Optional
   reminderSubject: "<YOUR NAME>'s Plex Subscription Reminder - {days_left} Days Left"
   reminderBody: "Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription please reply to this email or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>"
   removalSubject: "<YOUR NAME>'s Plex Subscription Ended"
