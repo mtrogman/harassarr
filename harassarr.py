@@ -155,10 +155,15 @@ def checkInactiveUsersOnPlex(configFile, dryrun):
 
             # Check for Inactive Plex users in the database
             for user in inactiveUsers:
-                primaryEmail = user["primaryEmail"].lower()
+                primaryEmail = user["primaryEmail"]
+
+                # Ensure primaryEmail is not None
+                if primaryEmail is None:
+                    logging.error(f"Invalid user data: {user}")
+                    continue
 
                 # Check if the user is still on the Plex server
-                if any(plexUser["Email"].lower() == primaryEmail for plexUser in plexUsers):
+                if any(plexUser["Email"].lower() == primaryEmail.lower() for plexUser in plexUsers):
                     logging.warning(
                         f"Inactive user '{primaryEmail}' on server '{plexConfig['serverName']}' still has access to the Plex server."
                     )
@@ -195,6 +200,11 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
             for plexUser in plexUsers:
                 primaryEmail = plexUser["Email"].lower()
                 serverName = plexUser["Server"]
+
+                # Ensure the primaryEmail and serverName are not None
+                if primaryEmail is None or serverName is None:
+                    logging.error(f"Invalid Plex user data: {plexUser}")
+                    continue
 
                 # Check if the user's server matches the Plex configuration server name
                 if plexUser["Server"].lower() == plexConfig['serverName'].lower():
