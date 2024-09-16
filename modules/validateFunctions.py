@@ -1,4 +1,4 @@
-# plexFunctions.py
+#validateFunctions.py
 import sys
 import logging
 import socket

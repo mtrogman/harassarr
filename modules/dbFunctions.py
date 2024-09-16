@@ -230,6 +230,10 @@ def getDBUsers(user, password, server, database):
 def userExists(user, password, server, database, primaryEmail, serverName):
     try:
         # Connect to the database
+        if primaryEmail is None or serverName is None:  # Check if either value is None
+            logging.error(f"Invalid primaryEmail or serverName: primaryEmail={primaryEmail}, serverName={serverName}")
+            return False
+
         connection = mysql.connector.connect(
             host=server,
             user=user,
@@ -351,7 +355,7 @@ def getDBField(configFile, serverName, userEmail, field):
         )
 
         # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
+        cursor = connection.cursor(dictionary=True)
 
         # Query to select the specified field for the given user
         query = f"SELECT {field} FROM users WHERE server = %s AND primaryEmail = %s"
@@ -369,7 +373,7 @@ def getDBField(configFile, serverName, userEmail, field):
     except mysql.connector.Error as e:
         logging.error(f"Error getting {field} value: {e}")
         return None
-    
+
 
 def getAllFieldsForUser(configFile, serverName, userEmail):
     try:
