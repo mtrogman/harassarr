@@ -115,13 +115,10 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
                                             discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
                         else:
                             logging.warning(f"Missing {discordId} key in user dictionary.")
-
-
         except Exception as e:
             logging.error(f"Error checking inactive users with Discord Roles: {e}")
     else:
         raise FileNotFoundError(f"The file {userDataFile} does not exist.")
-
 
 def checkInactiveUsersOnPlex(configFile, dryrun):
     try:
@@ -158,23 +155,21 @@ def checkInactiveUsersOnPlex(configFile, dryrun):
                 primaryEmail = user["primaryEmail"]
 
                 # Ensure primaryEmail is not None
-                if primaryEmail is None:
+                if primaryEmail:
+                    # Check if the user is still on the Plex server
+                    if any(plexUser["Email"].lower() == primaryEmail.lower() for plexUser in plexUsers):
+                        logging.warning(
+                            f"Inactive user '{primaryEmail}' on server '{plexConfig['serverName']}' still has access to the Plex server."
+                        )
+
+                        # Invoke removePlexUser
+                        sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
+                        plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
+                else:
                     logging.error(f"Invalid user data: {user}")
-                    continue
-
-                # Check if the user is still on the Plex server
-                if any(plexUser["Email"].lower() == primaryEmail.lower() for plexUser in plexUsers):
-                    logging.warning(
-                        f"Inactive user '{primaryEmail}' on server '{plexConfig['serverName']}' still has access to the Plex server."
-                    )
-
-                    # Invoke removePlexUser
-                    sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                    plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail, sharedLibraries, dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking inactive users on Plex server: {e}")
-
 
 def checkPlexUsersNotInDatabase(configFile, dryrun):
     try:
@@ -202,32 +197,30 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
                 serverName = plexUser["Server"]
 
                 # Ensure the primaryEmail and serverName are not None
-                if primaryEmail is None or serverName is None:
+                if primaryEmail and serverName:
+                    # Check if the user's server matches the Plex configuration server name
+                    if plexUser["Server"].lower() == plexConfig['serverName'].lower():
+                        # Check if the user is in the database
+                        if not dbFunctions.userExists(
+                                user=dbConfig['user'],
+                                password=dbConfig['password'],
+                                server=dbConfig['host'],
+                                database=dbConfig['database'],
+                                primaryEmail=primaryEmail.lower(),
+                                serverName=serverName.lower()
+                        ):
+                            logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
+                            sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
+
+                            # Check if the user has status 'Inactive' in the database
+                            if dbFunctions.getDBField(configFile=configFile, serverName=dbConfig['host'], userEmail=primaryEmail.lower(), field='status') == 'Inactive':
+                                logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
+                                plexFunctions.removePlexUser(configFile, serverName.lower(), primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
+                else:
                     logging.error(f"Invalid Plex user data: {plexUser}")
-                    continue
-
-                # Check if the user's server matches the Plex configuration server name
-                if plexUser["Server"].lower() == plexConfig['serverName'].lower():
-                    # Check if the user is in the database
-                    if not dbFunctions.userExists(
-                            user=dbConfig['user'],
-                            password=dbConfig['password'],
-                            server=dbConfig['host'],
-                            database=dbConfig['database'],
-                            primaryEmail=primaryEmail,
-                            serverName=serverName
-                    ):
-                        logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
-                        sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-
-                        # Check if the user has status 'Inactive' in the database
-                        if dbFunctions.getDBField(configFile=configFile, serverName=dbConfig['host'], userEmail=primaryEmail, field='status') == 'Inactive':
-                            logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
-
 
 def checkUsersEndDate(configFile, dryrun):
     try:
@@ -260,7 +253,6 @@ def checkUsersEndDate(configFile, dryrun):
             # Extract end date
             endDate = user['endDate']
 
-
             # Check if endDate is within 7 days
             if endDate is not None:
                 # Extract user info
@@ -274,7 +266,6 @@ def checkUsersEndDate(configFile, dryrun):
                 except ValueError:
                     # Handle the case where the last character is not a number
                     streamCount = 2  # or any other default value you want to set
-
 
                 daysLeft = (endDate - today).days
                 # Retrieve the matching Plex configuration from config.yml
@@ -308,8 +299,7 @@ def checkUsersEndDate(configFile, dryrun):
                             if notifyEmail == 'Primary':
                                 toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')]
                             elif notifyEmail == 'Secondary':
-                                toEmail = [
-                                    dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
+                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
                             elif notifyEmail == 'Both':
                                 primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')
                                 secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')
@@ -374,7 +364,6 @@ def checkUsersEndDate(configFile, dryrun):
     except mysql.connector.Error as e:
         logging.error(f"Error checking users' endDate: {e}")
 
-
 def dailyRun(args, dryrun):
     logging.info(f"Starting Daily Run")
     # Validate Configuration is good
@@ -396,22 +385,22 @@ def dailyRun(args, dryrun):
         dbErrorFlag = True
     databaseValidation = validateFunctions.validateDBConnection(user, password, host, database)
     if not databaseValidation:
-        logging.error(f"Unable to authenticated with {user} to {host}")
+        logging.error(f"Unable to authenticate with {user} to {host}")
         dbErrorFlag = True
     validateDBDatabase = validateFunctions.validateDBDatabase(user, password, host, database)
     if not validateDBDatabase:
-        logging.error(f"Database {database} does not exists on {host}")
+        logging.error(f"Database {database} does not exist on {host}")
         dbErrorFlag = True
     tableValidation = validateFunctions.validateDBTable(user, password, host, database, table)
     if not tableValidation:
-        logging.error(f"Table {table} does not exists on {database}")
+        logging.error(f"Table {table} does not exist on {database}")
         dbErrorFlag = True
 
     # If unable to connect fully to the DB then force check/update values within config
     if dbErrorFlag:
         configFunctions.updateDatabaseConfig(configFile)
     else:
-        logging.info(f"Sucessfully connected to database")
+        logging.info(f"Successfully connected to database")
 
     # Check number of users in users table
     dbUsersCount = dbFunctions.countDBUsers(user, password, host, database)
@@ -441,7 +430,6 @@ def dailyRun(args, dryrun):
             if anotherPlexConfigResponse.lower() == 'no':
                 break
 
-
     else:
         for config in plexConfigurations:
             baseUrl = config.get("baseUrl")
@@ -464,10 +452,10 @@ def dailyRun(args, dryrun):
 
             plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
 
-    # See if there are any sneaky people who should not be on the plex servers (and boot em if there are)
+    # See if there are any sneaky people who should not be on the plex servers (and boot them if there are)
     checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
 
-    # See if anyone with an inactive status is still somehow on plex server
+    # See if anyone with an inactive status is still somehow on the plex server
     checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
 
     # Check for users with less than 7 days left or subscription has lapsed.
@@ -475,7 +463,6 @@ def dailyRun(args, dryrun):
 
     # See if there are any sneaky people who should not have the discord role associated with plex access (and remove the role if they have it)
     checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
-
 
 def main():
     parser = argparse.ArgumentParser(description='Harassarr Script')
@@ -514,7 +501,5 @@ def main():
         schedule.run_pending()
         time.sleep(1)
 
-
 if __name__ == "__main__":
     main()
-    
