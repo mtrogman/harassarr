@@ -43,6 +43,7 @@ def sendDiscordMessage(configFile, toUser, subject, body):
     # Create a Bot instance with intents
     intents = discord.Intents.default()
     intents.messages = True
+    intents.message_content = True  # Enable privileged intents
     bot = commands.Bot(command_prefix='!', intents=intents)
 
     @bot.event
@@ -52,8 +53,8 @@ def sendDiscordMessage(configFile, toUser, subject, body):
         except Exception as e:
             logging.error(f"Discord User Error: {e}")
         finally:
-            if toUser is None:
-                logging.error(f"Unable to fetch user, cannot send user msg")
+            if not user:
+                logging.error(f"Unable to fetch user, cannot send message")
                 await bot.close()
             else:
                 embed = Embed(title=f"**{subject}**", description=body, color=discord.Colour.blue())
@@ -62,7 +63,7 @@ def sendDiscordMessage(configFile, toUser, subject, body):
                 except discord.errors.Forbidden as e:
                     logging.warning(f"Failed to send message to {user.name}#{user.discriminator}: {e}")
                 except Exception as e:
-                    logging.error(f"An unexpected error occurred for {user.name}: {e}")
+                    logging.error(f"Unexpected error for {user.name}: {e}")
                 finally:
                     await bot.close()
 
