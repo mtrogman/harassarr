@@ -48,6 +48,7 @@ def sendDiscordMessage(configFile, toUser, subject, body):
 
     @bot.event
     async def on_ready():
+        user = None  # Initialize user to avoid UnboundLocalError
         try:
             user = await bot.fetch_user(toUser[0])
         except Exception as e:
@@ -55,17 +56,15 @@ def sendDiscordMessage(configFile, toUser, subject, body):
         finally:
             if not user:
                 logging.error(f"Unable to fetch user, cannot send message")
-                await bot.close()
             else:
                 embed = Embed(title=f"**{subject}**", description=body, color=discord.Colour.blue())
                 try:
                     await user.send(embed=embed)
                 except discord.errors.Forbidden as e:
-                    logging.warning(f"Failed to send message to {user.name}#{user.discriminator}: {e}")
+                    logging.warning(f"Failed to send message to {toUser[0]}: {e}")
                 except Exception as e:
-                    logging.error(f"Unexpected error for {user.name}: {e}")
-                finally:
-                    await bot.close()
+                    logging.error(f"Unexpected error: {e}")
+            await bot.close()
 
     bot.run(botToken)
 
