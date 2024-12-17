@@ -1,15 +1,7 @@
 # harassarr.py
-import logging
-import sys
-import os
-import schedule
-import time
-import argparse
-import discord
+import logging, sys, os, schedule, time, argparse, discord, mysql.connector, subprocess
 from discord.ext import commands
 from datetime import datetime, timedelta
-import mysql.connector
-import subprocess
 from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
@@ -193,31 +185,41 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
 
             # Check for Plex users not in the database for the specific server
             for plexUser in plexUsers:
-                primaryEmail = plexUser["Email"].lower()
-                serverName = plexUser["Server"]
+                primaryEmail = plexUser.get("Email")
+                serverName = plexUser.get("Server")
 
-                # Ensure the primaryEmail and serverName are not None
-                if primaryEmail and serverName:
+                if primaryEmail is not None and serverName is not None:
+                    # Normalize for comparison
+                    primaryEmail = primaryEmail.lower()
+                    serverName = serverName.lower()
+
                     # Check if the user's server matches the Plex configuration server name
-                    if plexUser["Server"].lower() == plexConfig['serverName'].lower():
+                    if serverName == plexConfig['serverName'].lower():
                         # Check if the user is in the database
-                        if not dbFunctions.userExists(
-                                user=dbConfig['user'],
-                                password=dbConfig['password'],
-                                server=dbConfig['host'],
-                                database=dbConfig['database'],
-                                primaryEmail=primaryEmail.lower(),
-                                serverName=serverName.lower()
-                        ):
+                        userExists = dbFunctions.userExists(
+                            user=dbConfig['user'],
+                            password=dbConfig['password'],
+                            server=dbConfig['host'],
+                            database=dbConfig['database'],
+                            primaryEmail=primaryEmail,
+                            serverName=serverName
+                        )
+
+                        if not userExists:
                             logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
-                            # Check if the user has status 'Inactive' in the database
-                            if dbFunctions.getDBField(configFile=configFile, serverName=dbConfig['host'], userEmail=primaryEmail.lower(), field='status') == 'Inactive':
-                                logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
-                                plexFunctions.removePlexUser(configFile, serverName.lower(), primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
+                            # Remove user from Plex
+                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
+
+
                 else:
                     logging.error(f"Invalid Plex user data: {plexUser}")
+                    if dryrun:
+                        logging.info(f"Dry run enabled. Skipping user removal for invalid user data: {plexUser}")
+                    else:
+                        # Attempt to remove if data is malformed but the user is accessible
+                        plexFunctions.removePlexUser(configFile, serverName, primaryEmail, plexConfig['standardLibraries'] + plexConfig['optionalLibraries'], dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
@@ -366,10 +368,11 @@ def checkUsersEndDate(configFile, dryrun):
 
 def dailyRun(args, dryrun):
     logging.info(f"Starting Daily Run")
-    # Validate Configuration is good
+    # Validate Configuration
     configFunctions.checkConfig(configFile)
     config = configFunctions.getConfig(configFile)
-    logging.info(f"Database configuration looks good")
+    logging.info(f"Configuration file loaded successfully")
+
     host = config['database']['host']
     port = config['database']['port']
     database = config['database']['database']
@@ -377,92 +380,64 @@ def dailyRun(args, dryrun):
     password = config['database']['password']
     table = "users"
 
-    # Validate Connection to Database is good
-    dbErrorFlag = False
+    # Validate Connection to Database
     serverValidation = validateFunctions.validateServer(host, port)
     if not serverValidation:
-        logging.error(f"Server {host} is NOT listening on {port}")
-        dbErrorFlag = True
+        logging.error(f"Database server {host} is NOT listening on port {port}. Exiting.")
+        sys.exit(1)
+
     databaseValidation = validateFunctions.validateDBConnection(user, password, host, database)
     if not databaseValidation:
-        logging.error(f"Unable to authenticate with {user} to {host}")
-        dbErrorFlag = True
+        logging.error(f"Unable to authenticate user {user} to database server {host}. Exiting.")
+        sys.exit(1)
+
     validateDBDatabase = validateFunctions.validateDBDatabase(user, password, host, database)
     if not validateDBDatabase:
-        logging.error(f"Database {database} does not exist on {host}")
-        dbErrorFlag = True
+        logging.error(f"Database {database} does not exist on {host}. Exiting.")
+        sys.exit(1)
+
     tableValidation = validateFunctions.validateDBTable(user, password, host, database, table)
     if not tableValidation:
-        logging.error(f"Table {table} does not exist on {database}")
-        dbErrorFlag = True
+        logging.error(f"Table {table} does not exist in database {database}. Exiting.")
+        sys.exit(1)
 
-    # If unable to connect fully to the DB then force check/update values within config
-    if dbErrorFlag:
-        configFunctions.updateDatabaseConfig(configFile)
-    else:
-        logging.info(f"Successfully connected to database")
+    # All validations passed
+    logging.info(f"Database connection validated successfully. Proceeding with checks.")
 
-    # Check number of users in users table
-    dbUsersCount = dbFunctions.countDBUsers(user, password, host, database)
-    if dbUsersCount == 0:
-        dbUserAddResponse = validateFunctions.getValidatedInput("Would you like to import users? (Yes or No): ",r'(?i)^(yes|no)$')
-        if dbUserAddResponse.lower() == 'yes':
-            while True:
-                path = input("Enter path to CSV: ")
-
-                # Validate .csv file exists in that location
-                if os.path.exists(path) and path.lower().endswith('.csv'):
-                    userInjection = dbFunctions.injectUsersFromCSV(user, password, host, database, path)
-                    break
-                else:
-                    print("Invalid file path or file format. Please provide a valid path to a .csv file.")
-    # Extract PLEX configurations
-    plexConfigurations = [
-        config[key] for key in config if key.startswith('PLEX-')
-    ]
-
-    # Check if there are any PLEX configurations
+    # Check if there are any Plex configurations
+    plexConfigurations = [config[key] for key in config if key.startswith('PLEX-')]
     if len(plexConfigurations) == 0:
-        logging.info("No valid PLEX configurations found in the config file. Creating PLEX configuration.")
-        while True:
-            plexFunctions.createPlexConfig(configFile)
-            anotherPlexConfigResponse = validateFunctions.getValidatedInput("Would you like to configure another Plex server? (Yes or No): ", r'(?i)^(yes|no)$')
-            if anotherPlexConfigResponse.lower() == 'no':
-                break
+        logging.error("No valid Plex configurations found in the config file. Exiting.")
+        sys.exit(1)
 
-    else:
-        for config in plexConfigurations:
-            baseUrl = config.get("baseUrl")
-            token = config.get("token")
-            serverName = config.get("serverName")
-            standardLibraries = config.get("standardLibraries")
-            optionalLibraries = config.get("optionalLibraries")
+    for plexConfig in plexConfigurations:
+        baseUrl = plexConfig.get("baseUrl")
+        token = plexConfig.get("token")
+        serverName = plexConfig.get("serverName")
 
-            if baseUrl and token:
-                plexValidation = validateFunctions.validatePlex(baseUrl, token)
-                if plexValidation:
-                    logging.info(f"Successfully connected to Plex instance: {serverName}")
-            else:
-                logging.warning(f"Skipping invalid PLEX configuration entry: {config}")
-            # logic to add additional plex servers
-            if args.add and args.add.lower() == 'plex':
-                logging.info("Adding Additional Plex configuration(s).")
-                plexFunctions.createPlexConfig(configFile)
-                return
+        if not baseUrl or not token:
+            logging.error(f"Invalid Plex configuration for server {serverName}. Missing baseUrl or token. Exiting.")
+            sys.exit(1)
 
-            plexUserInfo = plexFunctions.listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries)
+        plexValidation = validateFunctions.validatePlex(baseUrl, token)
+        if not plexValidation:
+            logging.error(f"Unable to connect to Plex instance {serverName}. Check baseUrl and token. Exiting.")
+            sys.exit(1)
 
-    # See if there are any sneaky people who should not be on the plex servers (and boot them if there are)
-    checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
+        logging.info(f"Successfully connected to Plex instance: {serverName}")
 
-    # See if anyone with an inactive status is still somehow on the plex server
-    checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
+    # Perform regular checks
+    try:
+        checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
+        checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
+        checkUsersEndDate(configFile, dryrun=dryrun)
+        checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
+    except Exception as e:
+        logging.error(f"An error occurred during execution: {e}. Exiting.")
+        sys.exit(1)
 
-    # Check for users with less than 7 days left or subscription has lapsed.
-    checkUsersEndDate(configFile, dryrun=dryrun)
+    logging.info(f"Daily Run completed successfully.")
 
-    # See if there are any sneaky people who should not have the discord role associated with plex access (and remove the role if they have it)
-    checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
 
 def main():
     parser = argparse.ArgumentParser(description='Harassarr Script')
