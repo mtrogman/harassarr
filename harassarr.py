@@ -193,31 +193,41 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
 
             # Check for Plex users not in the database for the specific server
             for plexUser in plexUsers:
-                primaryEmail = plexUser["Email"].lower()
-                serverName = plexUser["Server"]
+                primaryEmail = plexUser.get("Email")
+                serverName = plexUser.get("Server")
 
-                # Ensure the primaryEmail and serverName are not None
-                if primaryEmail and serverName:
+                if primaryEmail is not None and serverName is not None:
+                    # Normalize for comparison
+                    primaryEmail = primaryEmail.lower()
+                    serverName = serverName.lower()
+
                     # Check if the user's server matches the Plex configuration server name
-                    if plexUser["Server"].lower() == plexConfig['serverName'].lower():
+                    if serverName == plexConfig['serverName'].lower():
                         # Check if the user is in the database
-                        if not dbFunctions.userExists(
-                                user=dbConfig['user'],
-                                password=dbConfig['password'],
-                                server=dbConfig['host'],
-                                database=dbConfig['database'],
-                                primaryEmail=primaryEmail.lower(),
-                                serverName=serverName.lower()
-                        ):
+                        userExists = dbFunctions.userExists(
+                            user=dbConfig['user'],
+                            password=dbConfig['password'],
+                            server=dbConfig['host'],
+                            database=dbConfig['database'],
+                            primaryEmail=primaryEmail,
+                            serverName=serverName
+                        )
+
+                        if not userExists:
                             logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
-                            # Check if the user has status 'Inactive' in the database
-                            if dbFunctions.getDBField(configFile=configFile, serverName=dbConfig['host'], userEmail=primaryEmail.lower(), field='status') == 'Inactive':
-                                logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has status 'Inactive' but is still on the Plex server.")
-                                plexFunctions.removePlexUser(configFile, serverName.lower(), primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
+                            # Remove user from Plex
+                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
+
+
                 else:
                     logging.error(f"Invalid Plex user data: {plexUser}")
+                    if dryrun:
+                        logging.info(f"Dry run enabled. Skipping user removal for invalid user data: {plexUser}")
+                    else:
+                        # Attempt to remove if data is malformed but the user is accessible
+                        plexFunctions.removePlexUser(configFile, serverName, primaryEmail, plexConfig['standardLibraries'] + plexConfig['optionalLibraries'], dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
