@@ -1,409 +1,205 @@
-#dbFunctions.py
-import sys
-import csv
-import mysql.connector
-import logging
+import logging, mysql.connector, sys
 from datetime import datetime
 import modules.configFunctions as configFunctions
 
+# Configure logging
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("DBFunctions")
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Helper Functions
+def connect_to_database(db_config):
+    """
+    Establish a connection to the database.
 
-def createDBUser(rootUser, rootPassword, newUser, newPassword, database, server):
+    Args:
+        db_config (dict): Database configuration dictionary.
+
+    Returns:
+        mysql.connector.connection.MySQLConnection: Database connection object.
+    """
     try:
-        # Connect to MySQL using the root user to check if the user already exists
-        cnx = mysql.connector.connect(user=rootUser, password=rootPassword, host=server)
-        cursor = cnx.cursor()
-
-        # Check if the user already exists
-        cursor.execute(f"SELECT 1 FROM mysql.user WHERE user = '{newUser}' LIMIT 1;")
-        userExists = cursor.fetchone()
-
-        if userExists:
-            # User already exists, reset the password and update permissions
-            cursor.execute(f"SET PASSWORD FOR '{newUser}'@'%' = PASSWORD('{newPassword}');")
-            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{newUser}'@'%';")
-            cursor.execute("FLUSH PRIVILEGES;")
-            logging.info(f"User '{newUser}' exists. Password reset and permissions updated.")
-
-        else:
-            # User doesn't exist, create the new user with all privileges on the specified database
-            cursor.execute(f"CREATE USER '{newUser}'@'%' IDENTIFIED BY '{newPassword}';")
-            cursor.execute(f"GRANT ALL PRIVILEGES ON {database}.* TO '{newUser}'@'%';")
-            cursor.execute("FLUSH PRIVILEGES;")
-            logging.info(f"User '{newUser}' created with all privileges on database '{database}'.")
-
+        connection = mysql.connector.connect(**db_config)
+        return connection
     except mysql.connector.Error as err:
-        logging.error("Database user creation or update failed.")
-        logging.error(f"Error: {err}")
-        return False  # Return failure
-
-    finally:
-        # Close the cursor and connection
-        if 'cursor' in locals():
-            cursor.close()
-        if 'cnx' in locals():
-            cnx.close()
-    return True  # Return success
-
-
-def createDBStructure(rootUser, rootPassword, database, server):
-    try:
-        # Connect to MySQL using the root user to create the new user
-        cnx = mysql.connector.connect(user=rootUser, password=rootPassword, host=server)
-        cursor = cnx.cursor()
-
-        # Create the database if it doesn't exist
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
-        logging.info(f"Database '{database}' in place.")
-
-        # Switch to the new database
-        cursor.execute(f"USE {database};")
-
-        # Check if the table exists
-        cursor.execute("SHOW TABLES LIKE 'users';")
-        tableExists = cursor.fetchone()
-
-        if not tableExists:
-            # Define your table creation SQL statement
-            createTableQuery = """
-                CREATE TABLE `users` (
-                    `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    `primaryEmail` VARCHAR(100) NULL DEFAULT '',
-                    `secondaryEmail` VARCHAR(100) NULL DEFAULT 'n/a',
-                    `primaryDiscord` VARCHAR(100) NULL DEFAULT '',
-                    `primaryDiscordId` VARCHAR(25) NULL DEFAULT '',
-                    `secondaryDiscord` VARCHAR(100) NULL DEFAULT 'n/a',
-                    `secondaryDiscordId` VARCHAR(25) NULL DEFAULT '',
-                    `notifyDiscord` VARCHAR(10) NULL DEFAULT 'primary',
-                    `notifyEmail` VARCHAR(10) NULL DEFAULT 'primary',
-                    `status` VARCHAR(10) NULL DEFAULT '',
-                    `server` VARCHAR(25) NULL DEFAULT '',
-                    `4k` ENUM('Yes', 'No'),
-                    `paymentMethod` VARCHAR(25) NULL DEFAULT '',
-                    `paymentPerson` VARCHAR(25) NULL DEFAULT '',
-                    `paidAmount` DECIMAL(10, 2) NULL DEFAULT NULL,
-                    `joinDate` DATE DEFAULT CURRENT_DATE,
-                    `startDate` DATE DEFAULT CURRENT_DATE,
-                    `endDate` DATE NULL DEFAULT NULL
-                ) COLLATE='utf8_bin';
-            """
-
-            # Execute the table creation query
-            cursor.execute(createTableQuery)
-            logging.info("Table 'users' created.")
-        else:
-            logging.info("Table 'users' already exists.")
-
-        cnx.commit()
-
-    except mysql.connector.Error as err:
-        logging.error("Database and table creation failed.")
-        logging.error(f"Error: {err}")
-        return False  
-
-    finally:
-        # Close the cursor and connection
-        if 'cursor' in locals():
-            cursor.close()
-        if 'cnx' in locals():
-            cnx.close()
-    return True
-
-
-def injectUsersFromCSV(user, password, server, database, csvFilePath):
-    # Database connection parameters
-    dbConfig = {
-        'host': server,
-        'user': user,
-        'password': password,
-        'database': database
-    }
-
-    try:
-        # Open database connection
-        connection = mysql.connector.connect(**dbConfig)
-        cursor = connection.cursor()
-
-        # Read data from CSV file with utf-8 encoding
-        with open(csvFilePath, 'r', encoding='utf-8') as csvFile:
-            csvReader = csv.DictReader(csvFile)
-            for row in csvReader:
-                # Convert date strings to datetime objects if they are not empty
-                startDateStr = row.get('startDate', '')
-                endDateStr = row.get('endDate', '')
-                joinedDateStr = row.get('joinDate', '')
-
-                startDate = datetime.strptime(startDateStr, '%m/%d/%Y').date() if startDateStr else None
-                endDate = datetime.strptime(endDateStr, '%m/%d/%Y').date() if endDateStr else None
-                joinDate = datetime.strptime(joinedDateStr, '%m/%d/%Y').date() if joinedDateStr else None
-
-                # SQL query to insert data into the 'users' table
-                insert_query = """
-                    INSERT INTO users (primaryDiscord, secondaryDiscord, primaryEmail, secondaryEmail,
-                                primaryDiscordId, secondaryDiscordId,
-                                notifyDiscord, notifyEmail, status, server, 4k, paidAmount,
-                                paymentMethod, paymentPerson, startDate, endDate, joinDate)
-                    VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                """
-
-
-                # Data to be inserted
-                data = (
-                    row.get('primaryDiscord', ''), row.get('secondaryDiscord', ''),
-                    row.get('primaryEmail', ''), row.get('secondaryEmail', ''),
-                    row.get('primaryDiscordId', ''), row.get('secondaryDiscordId', ''),
-                    row.get('notifyDiscord', ''), row.get('notifyEmail', ''),
-                    row.get('status', ''), row.get('server', ''), row.get('4k', ''),
-                    row.get('paidAmount'), row.get('paymentMethod', ''),
-                    row.get('paymentPerson', ''), startDate, endDate, joinDate
-                )
-
-                # Execute the SQL query
-                cursor.execute(insert_query, data)
-                logging.info(f"User {row.get('primaryEmail', '')} imported successfully.")
-
-        # Commit changes and close connection
-        connection.commit()
-        connection.close()
-
-        print("Data inserted successfully.")
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-def countDBUsers(user, password, server, database):
-    # Database connection parameters
-    dbConfig = {
-        'host': server,
-        'user': user,
-        'password': password,
-        'database': database
-    }
-
-    try:
-        # Open database connection
-        connection = mysql.connector.connect(**dbConfig)
-        cursor = connection.cursor()
-
-        # SQL query to count rows in the 'users' table
-        countQuery = "SELECT COUNT(*) FROM users"
-
-        # Execute the SQL query
-        cursor.execute(countQuery)
-
-        # Fetch the result
-        count = cursor.fetchone()[0]
-
-        # Close connection
-        connection.close()
-
-        return count
-    except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Failed to connect to the database: {err}")
         return None
 
 
-def getDBUsers(user, password, server, database):
+def execute_query(query, params=None, fetch_one=False, fetch_all=False, db_config=None):
+    """
+    Execute a database query with optional parameters.
+
+    Args:
+        query (str): SQL query string.
+        params (tuple): Parameters for the query.
+        fetch_one (bool): Fetch a single result.
+        fetch_all (bool): Fetch all results.
+        db_config (dict): Database configuration dictionary.
+
+    Returns:
+        Any: Query result or None if the query fails.
+    """
+    if not db_config:
+        logger.error("Database configuration is missing.")
+        return None
+
+    connection = connect_to_database(db_config)
+    if not connection:
+        return None
+
     try:
-        cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
-        cursor = cnx.cursor()
-
-        # Example query to retrieve usernames from a 'users' table
-        query = "SELECT primaryEmail FROM users;"
-        cursor.execute(query)
-
-        # Fetch all usernames
-        dbUsers = [row[0] for row in cursor.fetchall()]
-
-        # Close the cursor and connection
-        cursor.close()
-        cnx.close()
-
-        return dbUsers
-
+        cursor = connection.cursor(dictionary=True if fetch_one or fetch_all else False)
+        cursor.execute(query, params)
+        result = None
+        if fetch_one:
+            result = cursor.fetchone()
+        elif fetch_all:
+            result = cursor.fetchall()
+        connection.commit()
+        return result
     except mysql.connector.Error as err:
-        raise ValueError(f"Error retrieving users from the database: {err}")
-
-
-def userExists(user, password, server, database, primaryEmail, serverName):
-    try:
-        # Connect to the database
-        if primaryEmail is None or serverName is None:  # Check if either value is None
-            logging.error(f"Invalid primaryEmail or serverName: primaryEmail={primaryEmail}, serverName={serverName}")
-            return False
-
-        connection = mysql.connector.connect(
-            host=server,
-            user=user,
-            password=password,
-            database=database
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor()
-
-        # Query to check if the user exists in the database for the specific server
-        query = "SELECT * FROM users WHERE LOWER(primaryEmail) = %s AND LOWER(server) = %s"
-        cursor.execute(query, (primaryEmail.lower(), serverName.lower()))
-
-        # Fetch the result
-        result = cursor.fetchone()
-
-        # Close the cursor and connection
+        logger.error(f"Error executing query: {err}")
+        return None
+    finally:
         cursor.close()
         connection.close()
 
-        # Return True if the user exists, False otherwise
-        return result is not None
 
-    except mysql.connector.Error as e:
-        logging.error(f"Error checking if user exists in the database: {e}")
+# Main Functions
+def count_db_users(db_config):
+    """
+    Count the number of users in the 'users' table.
+
+    Args:
+        db_config (dict): Database configuration dictionary.
+
+    Returns:
+        int: Number of users or None if the query fails.
+    """
+    query = "SELECT COUNT(*) AS user_count FROM users"
+    result = execute_query(query, db_config=db_config, fetch_one=True)
+    return result["user_count"] if result else None
+
+
+def get_db_users(db_config):
+    """
+    Retrieve a list of primary emails from the 'users' table.
+
+    Args:
+        db_config (dict): Database configuration dictionary.
+
+    Returns:
+        list: List of primary emails or an empty list if the query fails.
+    """
+    query = "SELECT primaryEmail FROM users"
+    result = execute_query(query, db_config=db_config, fetch_all=True)
+    return [row["primaryEmail"] for row in result] if result else []
+
+
+def user_exists(db_config, primary_email, server_name):
+    """
+    Check if a user exists in the 'users' table for a specific server.
+
+    Args:
+        db_config (dict): Database configuration dictionary.
+        primary_email (str): Primary email of the user.
+        server_name (str): Server name.
+
+    Returns:
+        bool: True if the user exists, False otherwise.
+    """
+    if not primary_email or not server_name:
+        logger.error("Invalid input: primary_email and server_name are required.")
         return False
 
-
-def getUsersByStatus(user, password, host, database, status, serverName):
-    try:
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database
-        )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select users by status and server name
-        if serverName == "*":
-            # If serverName is "*", retrieve all users regardless of the server name
-            query = "SELECT * FROM users WHERE status = %s"
-            cursor.execute(query, (status,))
-        else:
-            # If a specific serverName is provided, include it in the query
-            query = "SELECT * FROM users WHERE status = %s AND server = %s"
-            cursor.execute(query, (status, serverName))
-
-        # Fetch all users
-        users = cursor.fetchall()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return users
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
+    query = "SELECT 1 FROM users WHERE LOWER(primaryEmail) = %s AND LOWER(server) = %s"
+    result = execute_query(query, params=(primary_email.lower(), server_name.lower()), db_config=db_config, fetch_one=True)
+    return bool(result)
 
 
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting users by status: {e}")
-        return []
+def get_users_by_status(db_config, status, server_name="*"):
+    """
+    Retrieve users by their status and server name.
+
+    Args:
+        db_config (dict): Database configuration dictionary.
+        status (str): User status ('Active', 'Inactive').
+        server_name (str): Server name. Use '*' to retrieve users across all servers.
+
+    Returns:
+        list: List of users matching the criteria or an empty list if the query fails.
+    """
+    if server_name == "*":
+        query = "SELECT * FROM users WHERE status = %s"
+        params = (status,)
+    else:
+        query = "SELECT * FROM users WHERE status = %s AND server = %s"
+        params = (status, server_name)
+
+    result = execute_query(query, params=params, db_config=db_config, fetch_all=True)
+    return result if result else []
 
 
-def updateUserStatus(configFile, serverName, userEmail, newStatus):
-    config = configFunctions.getConfig(configFile)
-    dbConfig = config.get('database', None)
+def update_user_status(db_config, server_name, primary_email, new_status):
+    """
+    Update the status of a user in the 'users' table.
 
-    try:
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
+    Args:
+        db_config (dict): Database configuration dictionary.
+        server_name (str): Server name.
+        primary_email (str): Primary email of the user.
+        new_status (str): New status ('Active', 'Inactive').
 
-        # Create a cursor object
-        cursor = connection.cursor()
+    Returns:
+        bool: True if the update is successful, False otherwise.
+    """
+    if new_status not in ("Active", "Inactive"):
+        logger.error("Invalid status. Please use 'Active' or 'Inactive'.")
+        return False
 
-        # Validate the new_status input
-        if newStatus not in ('Active', 'Inactive'):
-            raise ValueError("Invalid status. Please provide 'Active' or 'Inactive'.")
-
-        # Update the user status
-        update_query = "UPDATE users SET status = %s WHERE primaryEmail = %s AND server = %s"
-        cursor.execute(update_query, (newStatus, userEmail, serverName))
-
-        # Commit the changes
-        connection.commit()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        logging.info(f"User '{userEmail}' status updated to '{newStatus}' for server '{serverName}'.")
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error updating user status: {e}")
+    query = "UPDATE users SET status = %s WHERE primaryEmail = %s AND server = %s"
+    result = execute_query(query, params=(new_status, primary_email, server_name), db_config=db_config)
+    if result is not None:
+        logger.info(f"User {primary_email} status updated to {new_status} on server {server_name}.")
+        return True
+    return False
 
 
-def getDBField(configFile, serverName, userEmail, field):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
+def get_user_field(db_config, server_name, primary_email, field):
+    """
+    Retrieve a specific field for a user.
 
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
+    Args:
+        db_config (dict): Database configuration dictionary.
+        server_name (str): Server name.
+        primary_email (str): Primary email of the user.
+        field (str): Field name to retrieve.
 
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)
-
-        # Query to select the specified field for the given user
-        query = f"SELECT {field} FROM users WHERE server = %s AND primaryEmail = %s"
-        cursor.execute(query, (serverName, userEmail))
-
-        # Fetch the field value
-        result = cursor.fetchone()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return result[field] if result else None
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting {field} value: {e}")
-        return None
+    Returns:
+        Any: Field value or None if the query fails.
+    """
+    query = f"SELECT {field} FROM users WHERE server = %s AND primaryEmail = %s"
+    result = execute_query(query, params=(server_name, primary_email), db_config=db_config, fetch_one=True)
+    return result[field] if result else None
 
 
-def getAllFieldsForUser(configFile, serverName, userEmail):
-    try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
+def get_all_fields_for_user(db_config, server_name, primary_email):
+    """
+    Retrieve all fields for a specific user.
 
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
-        )
+    Args:
+        db_config (dict): Database configuration dictionary.
+        server_name (str): Server name.
+        primary_email (str): Primary email of the user.
 
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select all fields for the given user
-        query = "SELECT * FROM users WHERE server = %s AND primaryEmail = %s"
-        cursor.execute(query, (serverName, userEmail))
-
-        # Fetch the result
-        result = cursor.fetchone()
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
-
-        return result if result else None
-
-    except mysql.connector.Error as e:
-        logging.error(f"Error getting all fields for the user: {e}")
-        return None
+    Returns:
+        dict: User record as a dictionary or None if the query fails.
+    """
+    query = "SELECT * FROM users WHERE server = %s AND primaryEmail = %s"
+    result = execute_query(query, params=(server_name, primary_email), db_config=db_config, fetch_one=True)
+    return result if result else None

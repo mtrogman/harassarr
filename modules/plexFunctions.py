@@ -1,4 +1,3 @@
-# plexFunctions.py
 import sys, logging, yaml
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
@@ -9,207 +8,199 @@ import modules.dbFunctions as dbFunctions
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def createPlexConfig(configFile):
-    username = ""
-    password = ""
-    serverName = ""
+# Helper Functions
+def get_plex_config(config, server_name):
+    """
+    Retrieve the Plex configuration for a given server name.
 
-    while True:
-        username = input(f"Enter Plex user (Default: {username}): ") or username
-        password = input(f"Enter Plex password (Default: {password}): ") or password
-        serverName = input(f"Enter Plex server name (Friendly Name) (Default: {serverName}): ") or serverName
+    Args:
+        config (dict): The global configuration dictionary.
+        server_name (str): The name of the Plex server.
 
-        try:
-            account = MyPlexAccount(username, password)
-            plex = account.resource(serverName).connect()
-            if plex:
-                break
-        except Exception as e:
-            if str(e).startswith("(429)"):
-                logging.error("Too many requests. Please try again later.")
-                return
-            logging.error("Could not connect to Plex server. Please check your credentials.")
-
-    config = configFunctions.getConfig(configFile)
-    formattedServerName = "PLEX-" + serverName.replace(" ", "_")
-    config.setdefault(formattedServerName, {})
-
-    libraries = plex.library.sections()
-    print("Available Libraries:")
-    for i, library in enumerate(libraries, start=1):
-        print(f"{i}. {library.title}")
-
-    selectedLibraries = input("Enter the numbers of default libraries to share (comma-separated, 'all' for all): ")
-    selectedLibraries = selectedLibraries.lower().split(',')
-
-    selectedStandardLibraries = []
-    selectedOptionalLibraries = []
-
-    if 'all' in selectedLibraries:
-        selectedStandardLibraries = [library.title for library in libraries]
-    else:
-        for selection in selectedLibraries:
-            try:
-                selection = int(selection.strip())
-                libraryTitle = libraries[selection - 1].title
-                selectedStandardLibraries.append(libraryTitle)
-            except (ValueError, IndexError):
-                logging.warning(f"Invalid selection: {selection}")
-
-    optionalLibraries = input("Enter the numbers of optional (4k) libraries to share (comma-separated, 'none' for none): ")
-    optionalLibraries = optionalLibraries.lower().split(',')
-
-    if 'none' not in optionalLibraries:
-        for selection in optionalLibraries:
-            try:
-                selection = int(selection.strip())
-                libraryTitle = libraries[selection - 1].title
-                selectedOptionalLibraries.append(libraryTitle)
-            except (ValueError, IndexError):
-                logging.warning(f"Invalid selection: {selection}")
-
-    config[formattedServerName].update({
-        'baseUrl': plex._baseurl,
-        'token': plex._token,
-        'serverName': serverName,
-        'standardLibraries': selectedStandardLibraries,
-        'optionalLibraries': selectedOptionalLibraries
-    })
-
-    with open(configFile, 'w') as config_file:
-        yaml.dump(config, config_file)
-
-    logging.info(f"Authenticated and stored token for Plex instance: {serverName}")
+    Returns:
+        dict: The Plex server configuration, or None if not found.
+    """
+    return config.get(f'PLEX-{server_name}', None)
 
 
-def listPlexUsers(baseUrl, token, serverName, standardLibraries, optionalLibraries, **kwargs):
-    plex = PlexServer(baseUrl, token)
+def authenticate_plex(base_url, token):
+    """
+    Authenticate to the Plex server using the given credentials.
+
+    Args:
+        base_url (str): The base URL of the Plex server.
+        token (str): The Plex authentication token.
+
+    Returns:
+        PlexServer: The authenticated Plex server instance.
+    """
+    try:
+        return PlexServer(base_url, token)
+    except Exception as e:
+        logging.error(f"Error authenticating to Plex server: {e}")
+        return None
+
+
+# Main Functions
+def list_plex_users(base_url, token, server_name, standard_libraries, optional_libraries):
+    """
+    List all users on a Plex server.
+
+    Args:
+        base_url (str): The base URL of the Plex server.
+        token (str): The Plex authentication token.
+        server_name (str): The name of the Plex server.
+        standard_libraries (list): List of standard library names.
+        optional_libraries (list): List of optional (e.g., 4K) library names.
+
+    Returns:
+        list: A list of user dictionaries.
+    """
+    plex = authenticate_plex(base_url, token)
+    if not plex:
+        return []
+
     users = plex.myPlexAccount().users()
-    userList = []
-    standardLibraries = len(standardLibraries)
-    optionalLibraries = len(optionalLibraries)
+    user_list = []
 
     for user in users:
-        for serverInfo in user.servers:
-            if serverName == serverInfo.name:
-                if optionalLibraries == 0:
-                    fourK = 'No'
-                elif serverInfo.numLibraries == standardLibraries + optionalLibraries:
-                    fourK = 'Yes'
-                elif serverInfo.numLibraries == standardLibraries:
-                    fourK = 'No'
-                elif serverInfo.numLibraries >= standardLibraries + optionalLibraries:
-                    fourK = 'Yes'
-                    logging.warning(f"{user.email} ({user.title}) has extra libraries shared to them; you should investigate.")
-                else:
-                    fourK = 'No'
-                    logging.warning(f"{user.email} ({user.title}) has not enough libraries shared to them; you should investigate.")
-                userInfo = {
+        for server_info in user.servers:
+            if server_name == server_info.name:
+                num_libraries = server_info.numLibraries
+                has_optional = num_libraries >= len(standard_libraries) + len(optional_libraries)
+                fourk = "Yes" if has_optional else "No"
+
+                if num_libraries < len(standard_libraries):
+                    logging.warning(f"{user.email} ({user.title}) has fewer libraries shared than expected.")
+                elif num_libraries > len(standard_libraries) + len(optional_libraries):
+                    logging.warning(f"{user.email} ({user.title}) has extra libraries shared.")
+
+                user_list.append({
                     "User ID": user.id,
                     "Username": user.title,
                     "Email": user.email,
-                    "Server": serverName,
-                    "Number of Libraries": serverInfo.numLibraries,
-                    "All Libraries Shared": serverInfo.allLibraries,
-                    "4K Libraries": fourK
-                }
-                userList.append(userInfo)
+                    "Server": server_name,
+                    "Number of Libraries": num_libraries,
+                    "All Libraries Shared": server_info.allLibraries,
+                    "4K Libraries": fourk,
+                })
 
-    return userList
+    return user_list
 
 
-def removePlexUser(configFile, serverName, userEmail, sharedLibraries, dryrun):
-    config = configFunctions.getConfig(configFile)
+def remove_plex_user(config_file, server_name, user_email, shared_libraries, dry_run):
+    """
+    Remove a user from a Plex server and notify them.
 
-    try:
-        plexConfig = config.get(f'PLEX-{serverName}', None)
-        if not isinstance(plexConfig, dict):
-            logging.error(f"No configuration found for Plex server '{serverName}'")
-            return
+    Args:
+        config_file (str): Path to the configuration file.
+        server_name (str): The name of the Plex server.
+        user_email (str): The email address of the user to remove.
+        shared_libraries (list): List of shared library names.
+        dry_run (bool): If True, perform a dry run without actual changes.
 
-        baseUrl = plexConfig.get('baseUrl', None)
-        token = plexConfig.get('token', None)
-        if not baseUrl or not token:
-            logging.error(f"Invalid configuration for Plex server '{serverName}'")
-            return
+    Returns:
+        None
+    """
+    config = configFunctions.getConfig(config_file)
+    plex_config = get_plex_config(config, server_name)
 
-        plex = PlexServer(baseUrl, token)
-    except Exception as e:
-        logging.error(f"Error authenticating to Plex server '{serverName}': {e}")
+    if not plex_config:
+        logging.error(f"No configuration found for Plex server '{server_name}'.")
+        return
+
+    base_url = plex_config.get("baseUrl")
+    token = plex_config.get("token")
+
+    if not base_url or not token:
+        logging.error(f"Invalid configuration for Plex server '{server_name}'.")
+        return
+
+    plex = authenticate_plex(base_url, token)
+    if not plex:
+        return
+
+    if dry_run:
+        logging.info(f"Dry run: Skipping removal of user '{user_email}' from server '{server_name}'.")
         return
 
     try:
-        if dryrun:
-            logging.info(f"REMOVE USER ({userEmail}) SKIPPED DUE TO DRYRUN")
-        else:
-            removeLibraries = plex.myPlexAccount().updateFriend(user=userEmail, sections=sharedLibraries, server=plex, removeSections=True)
-            if removeLibraries:
-                logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
+        plex.myPlexAccount().updateFriend(user=user_email, sections=shared_libraries, server=plex, removeSections=True)
+        logging.info(f"User '{user_email}' successfully removed from libraries on server '{server_name}'.")
     except Exception as e:
-        logging.error(f"Error removing user '{userEmail}' from Plex server '{serverName}': {e}")
+        logging.error(f"Error removing user '{user_email}' from Plex server '{server_name}': {e}")
+        return
 
+    notify_user_removal(config_file, server_name, user_email, dry_run)
+
+
+def notify_user_removal(config_file, server_name, user_email, dry_run):
+    """
+    Notify a user via email and Discord about their subscription removal.
+
+    Args:
+        config_file (str): Path to the configuration file.
+        server_name (str): The name of the Plex server.
+        user_email (str): The email address of the user to notify.
+        dry_run (bool): If True, log the action without sending notifications.
+
+    Returns:
+        None
+    """
     try:
-        notifyEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyEmail')
-        primaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryEmail')
-        secondaryEmail = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryEmail')
+        # Email notification
+        notify_email = dbFunctions.getDBField(config_file, server_name, user_email, "notifyEmail")
+        primary_email = dbFunctions.getDBField(config_file, server_name, user_email, "primaryEmail")
+        secondary_email = dbFunctions.getDBField(config_file, server_name, user_email, "secondaryEmail")
 
-        if notifyEmail == 'Primary':
-            toEmail = [primaryEmail]
-        elif notifyEmail == 'Secondary':
-            toEmail = [secondaryEmail]
-        elif notifyEmail == 'Both':
-            toEmail = [primaryEmail, secondaryEmail]
-        else:
-            toEmail = []
+        to_emails = []
+        if notify_email == "Primary":
+            to_emails.append(primary_email)
+        elif notify_email == "Secondary":
+            to_emails.append(secondary_email)
+        elif notify_email == "Both":
+            to_emails.extend([primary_email, secondary_email])
 
-        if not toEmail:  # Default to an empty list to avoid errors
-            logging.error(f"Missing notification email for user '{userEmail}'")
-            return
+        if to_emails:
+            emailFunctions.sendSubscriptionRemoved(config_file, to_emails, user_email, dry_run)
 
-        # Get pricing and 4K subscription status
-        streamCount = int(serverName[-1]) if serverName and serverName[-1].isdigit() else None
-        fourk = dbFunctions.getDBField(configFile, serverName, userEmail, '4k')
+        # Discord notification
+        notify_discord = dbFunctions.getDBField(config_file, server_name, user_email, "notifyDiscord")
+        primary_discord = dbFunctions.getDBField(config_file, server_name, user_email, "primaryDiscordId")
+        secondary_discord = dbFunctions.getDBField(config_file, server_name, user_email, "secondaryDiscordId")
 
-        is4kSubscribed = plexConfig.get('fourk', 'no') == 'yes'
-        pricing = plexConfig['4k' if is4kSubscribed else '1080p']
+        to_discord = []
+        if notify_discord == "Primary":
+            to_discord.append(primary_discord)
+        elif notify_discord == "Secondary":
+            to_discord.append(secondary_discord)
+        elif notify_discord == "Both":
+            to_discord.extend([primary_discord, secondary_discord])
 
-        oneM = pricing.get('1Month', None)
-        threeM = pricing.get('3Month', None)
-        sixM = pricing.get('6Month', None)
-        twelveM = pricing.get('12Month', None)
+        if to_discord:
+            discordFunctions.sendDiscordSubscriptionRemoved(config_file, to_discord, user_email, dry_run)
 
-        emailFunctions.sendSubscriptionRemoved(configFile, toEmail, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+        logging.info(f"Notifications sent for user '{user_email}' removal from server '{server_name}'.")
     except Exception as e:
-        logging.error(f"Error notifying user '{userEmail}' for Plex server '{serverName}': {e}")
+        logging.error(f"Error notifying user '{user_email}': {e}")
 
+
+# Example Function for Authentication
+def authenticate_to_plex_account(username, password, server_name):
+    """
+    Authenticate to Plex and connect to the specified server.
+
+    Args:
+        username (str): Plex account username.
+        password (str): Plex account password.
+        server_name (str): Name of the Plex server.
+
+    Returns:
+        PlexServer: Authenticated Plex server instance, or None on failure.
+    """
     try:
-        notifyDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'notifyDiscord')
-        primaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'primaryDiscordId')
-        secondaryDiscord = dbFunctions.getDBField(configFile, serverName, userEmail, 'secondaryDiscordId')
-
-        if notifyDiscord == 'Primary':
-            toDiscord = [primaryDiscord]
-        elif notifyDiscord == 'Secondary':
-            toDiscord = [secondaryDiscord]
-        elif notifyDiscord == 'Both':
-            toDiscord = [primaryDiscord, secondaryDiscord]
-        else:
-            toDiscord = []
-
-        discordFunctions.sendDiscordSubscriptionRemoved(configFile, toDiscord, userEmail, streamCount, fourk, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+        account = MyPlexAccount(username, password)
+        return account.resource(server_name).connect()
     except Exception as e:
-        logging.error(f"Error notifying user '{userEmail}' on Discord for Plex server '{serverName}': {e}")
-
-    try:
-        removalFriend = plex.myPlexAccount().removeFriend(user=userEmail)
-        if removalFriend:
-            logging.info(f"User '{userEmail}' has been successfully removed from Plex server '{serverName}'")
-        else:
-            logging.warning(f"Friendship with '{userEmail}' not found and thus not removed.")
-    except Exception as e:
-        logging.warning(f"Error removing friendship from user '{userEmail}' from Plex server '{serverName}': {e}")
-
-    if dryrun:
-        logging.info(f"SETTING USER ({userEmail}) TO INACTIVE SKIPPED DUE TO DRYRUN")
-    else:
-        dbFunctions.updateUserStatus(configFile, serverName, userEmail, 'Inactive')
+        logging.error(f"Error authenticating to Plex server '{server_name}': {e}")
+        return None

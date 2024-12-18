@@ -1,146 +1,207 @@
-# configFunctions.py
-import os
-import yaml
-import mysql.connector
-import logging
-import sys
-import modules.dbFunctions as dbFunctions
-import modules.validateFunctions as validateFunctions
+import os, yaml, logging, sys, mysql.connector
+from modules import dbFunctions, validateFunctions
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("ConfigFunctions")
 
 
-def getConfig(file):
+# Helper Functions
+def load_config(file_path):
+    """
+    Load YAML configuration file.
+
+    Args:
+        file_path (str): Path to the YAML file.
+
+    Returns:
+        dict: Configuration data.
+    """
     try:
-        with open(file, 'r') as yamlFile:
-            config = yaml.safe_load(yamlFile) or {}
+        with open(file_path, "r") as yaml_file:
+            config = yaml.safe_load(yaml_file) or {}
+        logger.debug(f"Configuration loaded from {file_path}.")
         return config
     except yaml.YAMLError as e:
-        logging.error(f"Error loading YAML from {file}: {e}")
+        logger.error(f"Error loading YAML from {file_path}: {e}")
         return {}
 
 
-def checkConfig(configFile):
-    if not os.path.isfile(configFile):
-        with open(configFile, 'w') as file:
+def save_config(file_path, config):
+    """
+    Save configuration data to a YAML file.
+
+    Args:
+        file_path (str): Path to the YAML file.
+        config (dict): Configuration data to save.
+    """
+    try:
+        with open(file_path, "w") as yaml_file:
+            yaml.dump(config, yaml_file, default_flow_style=False)
+        logger.info(f"Configuration saved to {file_path}.")
+    except IOError as e:
+        logger.error(f"Error saving configuration to {file_path}: {e}")
+
+
+def ensure_config_file_exists(file_path):
+    """
+    Ensure the configuration file exists; create an empty file if missing.
+
+    Args:
+        file_path (str): Path to the configuration file.
+    """
+    if not os.path.isfile(file_path):
+        with open(file_path, "w") as file:
             yaml.dump({}, file)
-        logging.info(f"{configFile} did not exist. Creating...")
-        createDatabaseConfig(configFile)
-    config = getConfig(configFile)
-
-    if 'database' not in config:
-        logging.info("Database configuration not found in config.yml.")
-        createDatabaseConfig(configFile)
-
-    requiredKeys = ['user', 'password', 'host', 'database', 'port']
-
-    if not all(key in config['database'] for key in requiredKeys):
-        logging.info("Invalid or incomplete database configuration in config.yml.")
-        for key in requiredKeys:
-            config['database'][key] = config['database'].get(key, '')
-        with open(configFile, 'w') as file:
-            yaml.dump(config, file)
-        updateDatabaseConfig(configFile)
+        logger.info(f"{file_path} did not exist. An empty configuration file has been created.")
 
 
-def createDatabaseConfig(configFile):
-    server = validateFunctions.getValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-    port = int(validateFunctions.getValidatedInput("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
+# Main Functions
+def check_config(config_file):
+    """
+    Check and validate the configuration file.
 
-    if not validateFunctions.validateServer(server, port):
-        while True:
-            logging.error(f"Could not connect to the database on port {port}. Please enter a valid IP address or hostname.")
-            server = validateFunctions.getValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-            port = int(validateFunctions.getValidatedInput("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
+    Args:
+        config_file (str): Path to the configuration file.
+    """
+    ensure_config_file_exists(config_file)
+    config = load_config(config_file)
 
-            if validateFunctions.validateServer(server, port):
-                break
+    if "database" not in config:
+        logger.info("Database configuration not found in config.yml.")
+        create_database_config(config_file)
 
-    rootUser = input("Enter root database user (default is root): ") or 'root'
-    rootPassword = input("Enter root database password: ")
+    required_keys = ["user", "password", "host", "database", "port"]
+    if not all(key in config.get("database", {}) for key in required_keys):
+        logger.warning("Incomplete or invalid database configuration in config.yml.")
+        update_database_config(config_file)
 
-    while True:
-        try:
-            cnx = mysql.connector.connect(user=rootUser, password=rootPassword, host=server)
-            cnx.close()
-            break
-        except mysql.connector.Error as e:
-            logging.error(f"Could not connect to the database with the provided credentials. Error: {e}")
-            logging.error("Please enter valid credentials.")
-            rootUser = input("Enter root database user (default is root): ") or 'root'
-            rootPassword = input("Enter root database password: ")
 
-    newUser = input("Enter new username (default is lsql_harassarr): ") or 'lsql_harassarr'
-    newPassword = input("Enter new user password: ")
-    database = input("Enter database name (default is media_mgmt): ") or 'media_mgmt'
-    createDBStructure = dbFunctions.createDBStructure(rootUser, rootPassword, database, server)
-    createDBUser = dbFunctions.createDBUser(rootUser, rootPassword, newUser, newPassword, database, server)
-    if createDBStructure:
-        if createDBUser:
-            config = getConfig(configFile)
-            config['database'] = {
-                'user': newUser,
-                'password': newPassword,
-                'host': server,
-                'port': port,
-                'database': database
+def create_database_config(config_file):
+    """
+    Create a new database configuration.
+
+    Args:
+        config_file (str): Path to the configuration file.
+    """
+    logger.info("Creating new database configuration.")
+
+    # Get database connection details
+    server = validateFunctions.getValidatedInput(
+        "Enter IP address or hostname of database: ", r"^[a-zA-Z0-9.-]+$"
+    )
+    port = int(validateFunctions.getValidatedInput(
+        "Enter port utilized by the database (default is 3306): ", r"^[0-9]+$"
+    ) or "3306")
+
+    while not validateFunctions.validateServer(server, port):
+        logger.error(f"Could not connect to the database on port {port}. Please enter valid details.")
+        server = validateFunctions.getValidatedInput(
+            "Enter IP address or hostname of database: ", r"^[a-zA-Z0-9.-]+$"
+        )
+        port = int(validateFunctions.getValidatedInput(
+            "Enter port utilized by the database (default is 3306): ", r"^[0-9]+$"
+        ) or "3306")
+
+    # Get root credentials for database
+    root_user = input("Enter root database user (default is root): ") or "root"
+    root_password = input("Enter root database password: ")
+
+    while not validate_db_credentials(root_user, root_password, server):
+        logger.error("Invalid root credentials. Please try again.")
+        root_user = input("Enter root database user (default is root): ") or "root"
+        root_password = input("Enter root database password: ")
+
+    # Get new user and database details
+    new_user = input("Enter new username (default is lsql_harassarr): ") or "lsql_harassarr"
+    new_password = input("Enter new user password: ")
+    database = input("Enter database name (default is media_mgmt): ") or "media_mgmt"
+
+    # Create database structure and user
+    if dbFunctions.createDBStructure(root_user, root_password, database, server):
+        if dbFunctions.createDBUser(root_user, root_password, new_user, new_password, database, server):
+            config = load_config(config_file)
+            config["database"] = {
+                "user": new_user,
+                "password": new_password,
+                "host": server,
+                "port": port,
+                "database": database,
             }
-
-            with open(configFile, 'w') as config_file:
-                yaml.dump(config, config_file)
-            logging.info("Database configuration updated successfully.")
+            save_config(config_file, config)
+            logger.info("Database configuration created successfully.")
 
 
-def updateDatabaseConfig(configFile):
-    config = getConfig(configFile)
-    server = config['database'].get('host', '')
-    port = config['database'].get('port', 3306)
-    database = config['database'].get('database', '')
-    user = config['database'].get('user', '')
-    password = config['database'].get('password', '')
+def validate_db_credentials(user, password, server):
+    """
+    Validate database credentials.
 
-    server = validateFunctions.getValidatedInput(f"Confirm this is where the database is hosted (Current: {server}): ", r'^[a-zA-Z0-9.-]+$') or server
-    port = int(validateFunctions.getValidatedInput(f"Confirm this is the port used by the database (Current: {port}): ", r'^\d+$') or port)
+    Args:
+        user (str): Database username.
+        password (str): Database password.
+        server (str): Database server.
 
-    if not validateFunctions.validateServer(server, port):
-        while True:
-            logging.error(f"Could not connect to the database on port {port}. Please enter a valid IP address or hostname.")
-            server = validateFunctions.getValidatedInput("Enter IP address or hostname of database: ", r'^[a-zA-Z0-9.-]+$')
-            port = int(validateFunctions.getValidatedInput("Enter port utilized by the database (default is 3306): ", r'^[0-9]+$') or '3306')
+    Returns:
+        bool: True if credentials are valid, False otherwise.
+    """
+    logger.debug(f"Validating credentials for user {user} on server {server}.")
+    try:
+        with mysql.connector.connect(user=user, password=password, host=server) as cnx:
+            return True
+    except mysql.connector.Error as e:
+        logger.error(f"Failed to validate database credentials: {e}")
+        return False
 
-            if validateFunctions.validateServer(server, port):
-                break
 
-    while True:
-        user = input(f"Enter new user (current user is {user}): ") or user
-        password = input(f"Enter new password (current password is {password}): ") or password
-        database = validateFunctions.getValidatedInput(f"Enter new database (current database is {database}): ", r'^[a-zA-Z0-9.-]+$') or database
+def update_database_config(config_file):
+    """
+    Update the existing database configuration.
 
-        try:
-            cnx = mysql.connector.connect(user=user, password=password, host=server, database=database)
-            cursor = cnx.cursor()
+    Args:
+        config_file (str): Path to the configuration file.
+    """
+    logger.info("Updating database configuration.")
+    config = load_config(config_file)
+    db_config = config.get("database", {})
 
-            cursor.execute("SELECT DATABASE();")
+    # Update server details
+    server = validateFunctions.getValidatedInput(
+        f"Confirm database host (Current: {db_config.get('host', '')}): ", r"^[a-zA-Z0-9.-]+$"
+    ) or db_config.get("host", "")
+    port = int(validateFunctions.getValidatedInput(
+        f"Confirm database port (Current: {db_config.get('port', 3306)}): ", r"^[0-9]+$"
+    ) or db_config.get("port", 3306))
 
-            cursor.close()
-            cnx.close()
+    # Validate server connection
+    while not validateFunctions.validateServer(server, port):
+        logger.error(f"Could not connect to the database on port {port}. Please enter valid details.")
+        server = validateFunctions.getValidatedInput(
+            "Enter IP address or hostname of database: ", r"^[a-zA-Z0-9.-]+$"
+        )
+        port = int(validateFunctions.getValidatedInput(
+            "Enter port utilized by the database (default is 3306): ", r"^[0-9]+$"
+        ) or "3306")
 
-            config = getConfig(configFile)
-            config['database'] = {
-                'user': user,
-                'password': password,
-                'host': server,
-                'port': port,
-                'database': database
-            }
+    # Update user and database details
+    user = input(f"Enter new username (current: {db_config.get('user', '')}): ") or db_config.get("user", "")
+    password = input(f"Enter new password: ") or db_config.get("password", "")
+    database = validateFunctions.getValidatedInput(
+        f"Enter new database name (current: {db_config.get('database', '')}): ", r"^[a-zA-Z0-9._-]+$"
+    ) or db_config.get("database", "")
 
-            with open(configFile, 'w') as config_file:
-                yaml.dump(config, config_file)
-            logging.info("Database configuration updated successfully.")
-            break
-
-        except mysql.connector.Error as err:
-            logging.error(f"Error: {err}")
-            logging.error("Database configuration update failed. Please check the provided details.")
-
-    return True
+    if validate_db_credentials(user, password, server):
+        config["database"] = {
+            "user": user,
+            "password": password,
+            "host": server,
+            "port": port,
+            "database": database,
+        }
+        save_config(config_file, config)
+        logger.info("Database configuration updated successfully.")
+    else:
+        logger.error("Failed to update database configuration. Invalid credentials.")
