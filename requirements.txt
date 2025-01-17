@@ -1,5 +1,5 @@
 discord.py==2.3.*
 pyyaml
 plexapi
-mysql-connector-python
+mysql-connector-python==8.4.0
 schedule
