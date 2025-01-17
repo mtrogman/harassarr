@@ -104,7 +104,7 @@ def checkInactiveUsersOnDiscord(configFile, dryrun):
                                         # Check if any roles in the CSV match the Plex role
                                         if plexConfig['role'].lower() in map(str.lower, roles):
                                             logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                            discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
+                                            discordFunctions.removeRole(configFile=configFile, discordUserId=DiscordID, roleName=plexConfig['role'], dryrun=dryrun)
                         else:
                             logging.warning(f"Missing {discordId} key in user dictionary.")
         except Exception as e:
@@ -156,7 +156,7 @@ def checkInactiveUsersOnPlex(configFile, dryrun):
 
                         # Invoke removePlexUser
                         sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                        plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
+                        plexFunctions.removePlexUser(configFile=configFile, plexConfig=plexConfig['serverName'], primaryEmail=primaryEmail.lower(), sharedLibraries=sharedLibraries, dryrun=dryrun)
                 else:
                     logging.error(f"Invalid user data: {user}")
 
@@ -210,7 +210,7 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
 
                             # Remove user from Plex
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
+                            plexFunctions.removePlexUser(configFile=configFile, serverName=serverName, primaryEmail=primaryEmail.lower, sharedLibraries=sharedLibraries, dryrun=dryrun)
 
 
                 else:
@@ -219,7 +219,7 @@ def checkPlexUsersNotInDatabase(configFile, dryrun):
                         logging.info(f"Dry run enabled. Skipping user removal for invalid user data: {plexUser}")
                     else:
                         # Attempt to remove if data is malformed but the user is accessible
-                        plexFunctions.removePlexUser(configFile, serverName, primaryEmail, plexConfig['standardLibraries'] + plexConfig['optionalLibraries'], dryrun=dryrun)
+                        plexFunctions.removePlexUser(configFile=configFile, serverName=serverName, primaryEmail=primaryEmail.lower, plexConfig=plexConfig['standardLibraries'] + plexConfig['optionalLibraries'], dryrun=dryrun)
 
     except Exception as e:
         logging.error(f"Error checking Plex users not in the database: {e}")
@@ -294,7 +294,7 @@ def checkUsersEndDate(configFile, dryrun):
 
                         if daysLeft < 0:
                             sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
+                            plexFunctions.removePlexUser(configFile=configFile, serverName=serverName, primaryEmail=primaryEmail, sharedLibraries=sharedLibraries, dryrun=dryrun)
                         else:
                             # Determine which email(s) to use based on notifyEmail value
                             notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyEmail')
@@ -323,8 +323,8 @@ def checkUsersEndDate(configFile, dryrun):
                                 # Don't send an email if notifyDiscord is 'None'
                                 toDiscord = None
 
-                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
-                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
+                            emailFunctions.sendSubscriptionReminder(configFile=configFile, toEmail=toEmail, primaryEmail=primaryEmail, daysLeft=daysLeft, fourk=fourk, streamCount=streamCount, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM, dryrun=dryrun)
+                            discordFunctions.sendDiscordSubscriptionReminder(configFile=configFile, toDiscord=toDiscord, primaryEmail=primaryEmail, daysLeft=daysLeft, fourk=fourk, streamCount=streamCount, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM, dryrun=dryrun)
 
                             discordIds = ['primaryDiscordId', 'secondaryDiscordId']
 
@@ -355,7 +355,8 @@ def checkUsersEndDate(configFile, dryrun):
                                                     # Check if any roles in the CSV match the Plex role
                                                     if plexConfig['role'].lower() in map(str.lower, roles):
                                                         logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                                        discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
+                                                        discordFunctions.removeRole(configFile=configFile, DiscordID=DiscordID, roleName=plexConfig['role'], dryrun=dryrun)
+
                                     else:
                                         logging.warning(f"Missing {discordId} key in user dictionary.")
 
@@ -428,10 +429,10 @@ def dailyRun(args, dryrun):
 
     # Perform regular checks
     try:
-        checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
-        checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
-        checkUsersEndDate(configFile, dryrun=dryrun)
-        checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
+        checkPlexUsersNotInDatabase(configFile=configFile, dryrun=dryrun)
+        checkInactiveUsersOnPlex(configFile=configFile, dryrun=dryrun)
+        checkUsersEndDate(configFile=configFile, dryrun=dryrun)
+        checkInactiveUsersOnDiscord(configFile=configFile, dryrun=dryrun)
     except Exception as e:
         logging.error(f"An error occurred during execution: {e}. Exiting.")
         sys.exit(1)
@@ -462,7 +463,7 @@ def main():
             exit(1)
     else:
         logging.info(f"No TIME to run set, running now once.")
-        dailyRun(args, dryrun=dryrun)
+        dailyRun(args=args, dryrun=dryrun)
         exit(0)
 
     # Log the starting message
