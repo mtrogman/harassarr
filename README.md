@@ -141,6 +141,13 @@ Thanks goes to these wonderful people:
             <sub style="font-size:14px"><b>trog</b></sub>
         </a>
     </td>
+    <td align="center" style="word-wrap: break-word; width: 75.0; height: 75.0">
+        <a href=https://github.com/k0nsun>
+            <img src=https://avatars.githubusercontent.com/u/4114890?v=4 width="50;"  style="border-radius:50%;align-items:center;justify-content:center;overflow:hidden;padding-top:10px" alt=K0nsun/>
+            <br />
+            <sub style="font-size:14px"><b>K0nsun</b></sub>
+        </a>
+    </td>
 </tr>
 </table>
 
