@@ -15,7 +15,7 @@ CREATE TABLE users (
     paymentMethod VARCHAR(25) NULL,
     paymentPerson VARCHAR(25) NULL,
     paidAmount DECIMAL(10, 2) NULL,
-    joinDate DATE NULL DEFAULT CURDATE(),
-    startDate DATE NULL DEFAULT CURDATE(),
+    joinDate DATE NULL DEFAULT (CURDATE()),
+    startDate DATE NULL DEFAULT (CURDATE()),
     endDate DATE NULL
 );
