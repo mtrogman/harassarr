@@ -1,90 +1,142 @@
+# modules/emailFunctions.py
 import logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import smtplib
-import modules.configFunctions as configFunctions
+from email.message import EmailMessage
+from email.utils import formataddr
 
+from modules import configFunctions
 
-def getEmailConfig(config):
-    return config.get('email', {})
+def _get_email_cfg(configFile: str):
+    cfg = configFunctions.getConfig(configFile)
+    ecfg = cfg.get("email", {}) if isinstance(cfg, dict) else {}
+    host = ecfg.get("smtpServer")
+    port = ecfg.get("smtpPort")
+    user = ecfg.get("smtpUsername")
+    pwd  = ecfg.get("smtpPassword")
+    send_as = ecfg.get("smtpSendAs") or user
+    from_name = ecfg.get("fromName") or "Plex Admin"
+    return {
+        "host": host, "port": port, "user": user, "pwd": pwd,
+        "send_as": send_as, "from_name": from_name,
+        "reminderSubject": ecfg.get("reminderSubject"),
+        "reminderBody": ecfg.get("reminderBody"),
+        "removalSubject": ecfg.get("removalSubject"),
+        "removalBody": ecfg.get("removalBody"),
+    }
 
+def _build_message(from_name: str, from_addr: str, to_addrs: list[str], subject: str, body: str) -> EmailMessage:
+    msg = EmailMessage()
+    msg["From"] = formataddr((from_name, from_addr))
+    msg["To"] = ", ".join([a for a in to_addrs if a])
+    msg["Subject"] = subject
+    msg["Reply-To"] = from_addr
+    msg.set_content(body)
+    return msg
 
-def getReminderSubject(config):
-    emailConfig = getEmailConfig(config)
-    return emailConfig.get('reminderSubject', 'Subscription Reminder - {daysLeft} Days Left')
+def _send_smtp(cfg: dict, msg: EmailMessage, dryrun: bool):
+    host = cfg.get("host"); port = cfg.get("port")
+    user = cfg.get("user"); pwd = cfg.get("pwd")
 
-
-def getReminderBody(config):
-    emailConfig = getEmailConfig(config)
-    return emailConfig.get('reminderBody', 'Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {daysLeft} days. Please contact us if you wish to continue your subscription by replying to this email.\n\nBest regards')
-
-
-def getRemovalSubject(config):
-    emailConfig = getEmailConfig(config)
-    return emailConfig.get('removalSubject', 'Subscription Removed')
-
-
-def getRemovalBody(config):
-    emailConfig = getEmailConfig(config)
-    return emailConfig.get('removalBody', 'Dear User,\n\nYour subscription for email: {primaryEmail} has ended for Plex. Please contact us if you wish to continue your subscription by replying to this email.\n\nBest regards')
-
-
-def sendEmail(configFile, subject, body, toEmails):
-    if not toEmails:
-        logging.error("No recipient specified.")
+    if not host or not port or not user or not pwd:
+        logging.error("Email SMTP not configured: smtpServer/smtpPort/smtpUsername/smtpPassword missing.")
         return
-    if not isinstance(toEmails, (list, tuple, set)):
-        toEmails = [toEmails]
 
-    # Retrieve the email configuration from the config file
-    config = configFunctions.getConfig(configFile)
-    emailConfig = config.get('email', {})
+    if not msg["To"]:
+        logging.info("Email skipped: no recipients.")
+        return
 
-    # Extract email configuration values
-    smtpServer = emailConfig.get('smtpServer', '')
-    smtpPort = emailConfig.get('smtpPort', 587)
-    smtpUsername = emailConfig.get('smtpUsername', '')
-    smtpPassword = emailConfig.get('smtpPassword', '')
-    smtpSendAs = emailConfig.get('smtpSendAs', None)
-
-    # Determine the from_email address
-    fromEmail = smtpSendAs if smtpSendAs else smtpUsername
-
-    # Check if any required values are missing
-    if not smtpServer or not smtpUsername or not smtpPassword:
-        raise ValueError("Email configuration is incomplete. Please check your config file.")
-
-    # Create the email message
-    msg = MIMEMultipart()
-    msg['From'] = fromEmail
-    msg['To'] = ', '.join(toEmails)  # Combine multiple emails into a comma-separated string
-    msg['Subject'] = subject
-
-    # Attach the body of the email
-    msg.attach(MIMEText(body, 'plain'))
-
-    # Connect to the SMTP server and send the email
-    with smtplib.SMTP(smtpServer, smtpPort) as server:
-        server.starttls()
-        server.login(smtpUsername, smtpPassword)
-        server.sendmail(fromEmail, toEmails, msg.as_string())
-
-
-def sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun):
-    config = configFunctions.getConfig(configFile)
-    subject = getReminderSubject(config).format(daysLeft=daysLeft)
-    body = getReminderBody(config).format(primaryEmail=primaryEmail, daysLeft=daysLeft, streamCount=streamCount, fourk=fourk, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM)
     if dryrun:
-        logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
-    else:
-        sendEmail(configFile, subject, body, toEmail)
+        logging.info("[DRY-RUN] Would EMAIL %s (subject=%r)", msg["To"], msg["Subject"])
+        return
 
+    try:
+        with smtplib.SMTP(host, int(port)) as s:
+            s.ehlo()
+            s.starttls()
+            s.login(user, pwd)
+            s.send_message(msg)
+        logging.info("Email sent to %s", msg["To"])
+    except Exception as e:
+        logging.error("SMTP send failed to %s: %s", msg["To"], e)
 
-def sendSubscriptionRemoved(configFile, toEmail, primaryEmail, dryrun):
-    config = configFunctions.getConfig(configFile)
-    subject = getRemovalSubject(config)
-    body = getRemovalBody(config).format(primaryEmail=primaryEmail)
-    if dryrun:
-        logging.info(f"EMAIL NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
-    else:
-        sendEmail(configFile, subject, body, toEmail)
+def _fmt(v): return "" if v is None else str(v)
+
+def _render(template: str, ctx: dict) -> str:
+    try:
+        return template.format_map(ctx)
+    except Exception as e:
+        logging.error("Email template render failed: %s", e)
+        return template
+
+def sendSubscriptionReminder(
+    configFile: str,
+    toEmails: list[str] | None,
+    primaryEmail: str,
+    daysLeft: int,
+    fourk: str,
+    streamCount: int,
+    oneM: str, threeM: str, sixM: str, twelveM: str,
+    dryrun: bool = False
+):
+    if not toEmails:
+        logging.info("Email reminder skipped for %s: no recipients configured.", primaryEmail)
+        return
+
+    cfg = _get_email_cfg(configFile)
+    subj_tpl = cfg.get("reminderSubject")
+    body_tpl = cfg.get("reminderBody")
+    if not subj_tpl or not body_tpl:
+        logging.error("Email reminder templates missing in config: email.reminderSubject/body")
+        return
+
+    ctx = {
+        "primaryEmail": primaryEmail,
+        "daysLeft": daysLeft,
+        "fourk": fourk,
+        "streamCount": streamCount,
+        "oneM": _fmt(oneM),
+        "threeM": _fmt(threeM),
+        "sixM": _fmt(sixM),
+        "twelveM": _fmt(twelveM),
+    }
+
+    msg = _build_message(cfg["from_name"], cfg["send_as"], toEmails,
+                         _render(subj_tpl, ctx), _render(body_tpl, ctx))
+    _send_smtp(cfg, msg, dryrun)
+
+def sendSubscriptionRemoved(
+    configFile: str,
+    toEmails: list[str] | None,
+    primaryEmail: str,
+    days_left: int,
+    fourk: str,
+    streamCount: int,
+    oneM: str, threeM: str, sixM: str, twelveM: str,
+    dryrun: bool = False
+):
+    if not toEmails:
+        logging.info("Email removal notice skipped for %s: no recipients configured.", primaryEmail)
+        return
+
+    cfg = _get_email_cfg(configFile)
+    subj_tpl = cfg.get("removalSubject")
+    body_tpl = cfg.get("removalBody")
+    if not subj_tpl or not body_tpl:
+        logging.error("Email removal templates missing in config: email.removalSubject/body")
+        return
+
+    # Use {daysLeft} in templates for consistency
+    ctx = {
+        "primaryEmail": primaryEmail,
+        "daysLeft": days_left,
+        "fourk": fourk,
+        "streamCount": streamCount,
+        "oneM": _fmt(oneM),
+        "threeM": _fmt(threeM),
+        "sixM": _fmt(sixM),
+        "twelveM": _fmt(twelveM),
+    }
+
+    msg = _build_message(cfg["from_name"], cfg["send_as"], toEmails,
+                         _render(subj_tpl, ctx), _render(body_tpl, ctx))
+    _send_smtp(cfg, msg, dryrun)
