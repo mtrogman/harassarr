@@ -4,3 +4,6 @@ plexapi
 mysql-connector-python==8.4.0
 schedule
 pydantic
+email-validator
+coloredlogs
+python-dotenv
