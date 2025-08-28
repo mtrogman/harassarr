@@ -1,477 +1,484 @@
 # harassarr.py
-import logging, sys, os, schedule, time, argparse, discord, mysql.connector, subprocess
-from discord.ext import commands
+from __future__ import annotations
+
+import argparse
+import asyncio
+import logging
+import os
+import sys
+import time
 from datetime import datetime, timedelta
-from modules import dbFunctions, configFunctions, plexFunctions, validateFunctions, emailFunctions, discordFunctions
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+import discord
+import mysql.connector
+import schedule
 
-configFile = "/config/config.yml"
-userDataFile = "/config/userData.csv"
+from modules import (
+    dbFunctions,
+    configFunctions,
+    plexFunctions,
+    validateFunctions,
+    emailFunctions,
+    discordFunctions,
+)
 
-# Set up logging to both console and file
-logFile = "/config/harassarr.log"
 
-# Check if the log file exists, create it if it doesn't
-if not os.path.exists(logFile):
-    open(logFile, 'w').close()
+CONFIG_FILE = os.getenv("HARASSARR_CONFIG", "/config/config.yml")
+LOG_FILE = os.getenv("HARASSARR_LOG", "/config/harassarr.log")
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[
-    logging.StreamHandler(sys.stdout),
-    logging.FileHandler(logFile)
-])
+# ----- logging -----
+if not os.path.exists(LOG_FILE):
+    open(LOG_FILE, "w").close()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(LOG_FILE)],
+)
+
+def _safe_lower(s): return (s or "").lower()
+def _norm(s): return (s or "").strip()
+
+# ---- log retention ----
 try:
-    logRetention = configFunctions.getConfig(configFile)['log']['retention']
-except KeyError:
-    logRetention = 90
+    _cfg_tmp = configFunctions.getConfig(CONFIG_FILE)
+    LOG_RETENTION_DAYS = _cfg_tmp.get("log", {}).get("retention", 90)
+except Exception:
+    LOG_RETENTION_DAYS = 90
 
-def delete_old_logs(log_file, logRetention):
-    with open(log_file, 'r+') as file:
-        lines = file.readlines()
-        file.seek(0)
-        for line in lines:
-            log_date_str = line.split(' - ', 1)[0]
-            log_date = datetime.strptime(log_date_str, '%Y-%m-%d %H:%M:%S,%f')
-            if datetime.now() - log_date <= timedelta(days=logRetention):
-                file.write(line)
-        file.truncate()
+def _delete_old_logs(path, retention_days):
+    try:
+        with open(path, "r+", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            f.seek(0)
+            for line in lines:
+                try:
+                    stamp = line.split(" - ", 1)[0]
+                    dt = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S,%f")
+                    if datetime.now() - dt <= timedelta(days=retention_days):
+                        f.write(line)
+                except Exception:
+                    f.write(line)
+            f.truncate()
+    except Exception:
+        pass
 
-# Delete old log entries
-delete_old_logs(logFile, logRetention)
+_delete_old_logs(LOG_FILE, LOG_RETENTION_DAYS)
 
-def checkInactiveUsersOnDiscord(configFile, dryrun):
-    # Janky way to get discord users... purge old csv, run subscript, validate csv there.
-    if os.path.exists(userDataFile):
-        os.remove(userDataFile)
-        logging.info(f"Deleted existing userData.csv")
-    else:
-        logging.info(f"Cannot delete userData.csv due to it not existing")
+# ========= STRICT pricing helpers =========
 
-    subprocess.run(["python", "supplemental/userDetail.py"])
+def _format_money(v):
+    if v is None: return ""
+    try:
+        return f"${float(str(v)):,.2f}"
+    except Exception:
+        return str(v)
 
-    if os.path.exists(userDataFile):
-        discordUserData = discordFunctions.readCsv(userDataFile)
+def _resolve_plex_cfg_strict(full_cfg: dict, server_name: str) -> dict | None:
+    key = f"PLEX-{server_name}"
+    return full_cfg.get(key)
 
+def _extract_prices_from_cfg(full_cfg: dict, server_name: str, fourk_flag: str):
+    plex_cfg = _resolve_plex_cfg_strict(full_cfg, server_name)
+    if plex_cfg is None:
+        # IMPORTANT: caller will decide to skip notifying/removal if block is missing
+        return None, "", "", "", ""
+    tier_key = "4k" if _safe_lower(fourk_flag) == "yes" else "1080p"
+    tier = plex_cfg.get(tier_key)
+    if not isinstance(tier, dict):
+        return plex_cfg, "", "", "", ""
+    return plex_cfg, _format_money(tier.get("1Month")), _format_money(tier.get("3Month")), _format_money(tier.get("6Month")), _format_money(tier.get("12Month"))
+
+# ========= Discord role audit (HTTP-only; no gateway) =========
+
+async def _ids_with_role_async(token: str, guild_id: int, role_name: str, ids_to_check: set[str]) -> set[str]:
+    """
+    HTTP-only: login, use REST (fetch_guild, fetch_roles, fetch_member), close; no gateway.
+    """
+    intents = discord.Intents.none()
+    client = discord.Client(intents=intents)
+    have = set()
+    try:
+        await client.login(token)
+
+        guild = await client.fetch_guild(guild_id)
+        if not guild:
+            logging.error("Discord: bot not in guild %s", guild_id)
+            return have
+
+        roles = await guild.fetch_roles()
+        target = next((r for r in roles if r.name.lower() == role_name.lower()), None)
+        if not target:
+            logging.warning("Discord: role '%s' not found in guild %s", role_name, guild_id)
+            return have
+
+        for sid in ids_to_check:
+            try:
+                m = await guild.fetch_member(int(sid))
+            except Exception:
+                m = None
+            if m and any(rr.id == target.id for rr in m.roles):
+                have.add(sid)
+        return have
+    finally:
         try:
-            # Load database configuration
-            dbConfig = configFunctions.getConfig(configFile)['database']
+            await client.close()
+        except Exception:
+            pass
 
-            # Load Plex configurations
-            plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
-
-            for plexConfigName in plexConfigs:
-                plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
-
-                # Get Inactive users from the database for the specific server
-                inactiveUsers = dbFunctions.getUsersByStatus(
-                    user=dbConfig['user'],
-                    password=dbConfig['password'],
-                    host=dbConfig['host'],
-                    database=dbConfig['database'],
-                    status='Inactive',
-                    serverName=plexConfig['serverName']
-                )
-
-                # Get Active users from the database for the specific server
-                activeUsers = dbFunctions.getUsersByStatus(
-                    user=dbConfig['user'],
-                    password=dbConfig['password'],
-                    host=dbConfig['host'],
-                    database=dbConfig['database'],
-                    status='Active',
-                    serverName=plexConfig['serverName']
-                )
-
-                if os.path.exists(userDataFile):
-                    discordUserData = discordFunctions.readCsv(userDataFile)
-
-                # Check for Inactive Plex users in the database
-                discordIds = ['primaryDiscordId', 'secondaryDiscordId']
-                for user in inactiveUsers:
-                    for discordId in discordIds:
-                        if discordId in user:
-                            DiscordID = user[discordId]
-
-                            # Check if there is at least one active status for the primaryDiscordId
-                            active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
-
-                            if not active_status_exists:
-                                for user_data in discordUserData:
-                                    if user_data.get('discord_id') == DiscordID:
-                                        roles = user_data.get('roles')
-                                        # Check if any roles in the CSV match the Plex role
-                                        if plexConfig['role'].lower() in map(str.lower, roles):
-                                            logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                            discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
-                        else:
-                            logging.warning(f"Missing {discordId} key in user dictionary.")
-        except Exception as e:
-            logging.error(f"Error checking inactive users with Discord Roles: {e}")
-    else:
-        raise FileNotFoundError(f"The file {userDataFile} does not exist.")
-
-def checkInactiveUsersOnPlex(configFile, dryrun):
+def _ids_with_role(config_path: str, role_name: str, ids: list[str]) -> set[str]:
+    cfg = configFunctions.getConfig(config_path)
+    dcfg = cfg.get("discord", {})
+    token = dcfg.get("token")
+    guild_id = dcfg.get("guildId")
+    if not token or not guild_id:
+        logging.error("Discord token/guildId missing; cannot verify roles.")
+        return set()
     try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
+        gid = int(guild_id)
+    except Exception:
+        logging.error("Discord guildId must be an integer; got %r", guild_id)
+        return set()
+    ids_set = {str(i) for i in ids if i}
+    if not ids_set:
+        return set()
+    try:
+        return asyncio.run(_ids_with_role_async(token, gid, role_name, ids_set))
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(_ids_with_role_async(token, gid, role_name, ids_set))
+        finally:
+            loop.close()
 
-        # Load Plex configurations
-        plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
+# ========= Checks =========
 
-        for plexConfigName in plexConfigs:
-            plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
+def checkInactiveUsersOnDiscord(config_path, dryrun):
+    try:
+        cfg = configFunctions.getConfig(config_path)
+        dbConf = cfg["database"]
+        plexConfs = [cfg[k] for k in cfg if str(k).startswith("PLEX-")]
 
-            # Get Inactive users from the database for the specific server
-            inactiveUsers = dbFunctions.getUsersByStatus(
-                user=dbConfig['user'],
-                password=dbConfig['password'],
-                host=dbConfig['host'],
-                database=dbConfig['database'],
-                status='Inactive',
-                serverName=plexConfig['serverName']
+        for pc in plexConfs:
+            server = pc.get("serverName")
+            role_name = pc.get("role")
+            if not server or not role_name:
+                logging.warning("Discord audit: missing serverName/role in PLEX block; skipping.")
+                continue
+
+            inactive = dbFunctions.getUsersByStatus(
+                user=dbConf["user"], password=dbConf["password"], host=dbConf["host"],
+                database=dbConf["database"], status="Inactive", serverName=server
+            )
+            active = dbFunctions.getUsersByStatus(
+                user=dbConf["user"], password=dbConf["password"], host=dbConf["host"],
+                database=dbConf["database"], status="Active", serverName=server
             )
 
-            # Get the list of Plex users for the specific server
-            plexUsers = plexFunctions.listPlexUsers(
-                baseUrl=plexConfig['baseUrl'],
-                token=plexConfig['token'],
-                serverName=plexConfig['serverName'],
-                standardLibraries=plexConfig['standardLibraries'],
-                optionalLibraries=plexConfig['optionalLibraries']
-            )
+            active_ids = { _norm(u.get("primaryDiscordId")) for u in active if u.get("primaryDiscordId") } | \
+                         { _norm(u.get("secondaryDiscordId")) for u in active if u.get("secondaryDiscordId") }
 
-            # Check for Inactive Plex users in the database
-            for user in inactiveUsers:
-                primaryEmail = user["primaryEmail"]
+            candidates = []
+            for u in inactive:
+                for key in ("primaryDiscordId","secondaryDiscordId"):
+                    did = _norm(u.get(key))
+                    if did and did not in active_ids:
+                        candidates.append(did)
 
-                # Ensure primaryEmail is not None
-                if primaryEmail:
-                    # Check if the user is still on the Plex server
-                    if any(plexUser["Email"].lower() == primaryEmail.lower() for plexUser in plexUsers):
-                        logging.warning(
-                            f"Inactive user '{primaryEmail}' on server '{plexConfig['serverName']}' still has access to the Plex server."
-                        )
+            if not candidates:
+                logging.info("Discord audit '%s': no inactive users with Discord IDs to check.", server)
+                continue
 
-                        # Invoke removePlexUser
-                        sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                        plexFunctions.removePlexUser(configFile, plexConfig['serverName'], primaryEmail.lower(), sharedLibraries, dryrun=dryrun)
-                else:
-                    logging.error(f"Invalid user data: {user}")
+            still_has = _ids_with_role(config_path, role_name, candidates)
+            logging.info("Discord audit '%s': candidates=%d, still_has_role=%d", server, len(candidates), len(still_has))
+
+            for did in still_has:
+                try:
+                    discordFunctions.removeRole(config_path, did, role_name, dryrun=dryrun)
+                except Exception as e:
+                    logging.error("Failed to remove Discord role '%s' from %s: %s", role_name, did, e)
 
     except Exception as e:
-        logging.error(f"Error checking inactive users on Plex server: {e}")
+        logging.error("Error in checkInactiveUsersOnDiscord: %s", e)
 
-def checkPlexUsersNotInDatabase(configFile, dryrun):
+def _actionable_plex_users(pc: dict, purpose: str) -> list[dict]:
+    return plexFunctions.actionable_from_plex(
+        baseUrl=pc["baseUrl"],
+        token=pc["token"],
+        serverName=pc["serverName"],
+        standardLibraries=pc.get("standardLibraries", []),
+        optionalLibraries=pc.get("optionalLibraries", []),
+        purpose=purpose,
+    )
+
+def checkPlexUsersNotInDatabase(config_path, dryrun):
     try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
+        cfg = configFunctions.getConfig(config_path)
+        dbConf = cfg["database"]
+        plexConfs = [cfg[k] for k in cfg if str(k).startswith("PLEX-")]
 
-        # Load Plex configurations
-        plexConfigs = [config for config in configFunctions.getConfig(configFile) if config.startswith('PLEX-')]
+        for pc in plexConfs:
+            server_cfg_name = pc["serverName"]
+            plex_users = _actionable_plex_users(pc, purpose="DB presence audit")
 
-        for plexConfigName in plexConfigs:
-            plexConfig = configFunctions.getConfig(configFile)[plexConfigName]
+            for pu in plex_users:
+                email = pu.get("Email")
+                server_from_plex = pu.get("Server")
+                if not email or not server_from_plex:
+                    continue
 
-            # Get the list of Plex users for the specific server
-            plexUsers = plexFunctions.listPlexUsers(
-                baseUrl=plexConfig['baseUrl'],
-                token=plexConfig['token'],
-                serverName=plexConfig['serverName'],
-                standardLibraries=plexConfig['standardLibraries'],
-                optionalLibraries=plexConfig['optionalLibraries']
-            )
-
-            # Check for Plex users not in the database for the specific server
-            for plexUser in plexUsers:
-                primaryEmail = plexUser.get("Email")
-                serverName = plexUser.get("Server")
-
-                if primaryEmail is not None and serverName is not None:
-                    # Normalize for comparison
-                    primaryEmail = primaryEmail.lower()
-                    serverName = serverName.lower()
-
-                    # Check if the user's server matches the Plex configuration server name
-                    if serverName == plexConfig['serverName'].lower():
-                        # Check if the user is in the database
-                        userExists = dbFunctions.userExists(
-                            user=dbConfig['user'],
-                            password=dbConfig['password'],
-                            server=dbConfig['host'],
-                            database=dbConfig['database'],
-                            primaryEmail=primaryEmail,
-                            serverName=serverName
-                        )
-
-                        if not userExists:
-                            logging.warning(f"Plex user '{plexUser['Username']}' with email '{plexUser['Email']}' on server '{plexUser['Server']}' has access but is not in the database.")
-                            sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-
-                            # Remove user from Plex
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
-
-
-                else:
-                    logging.error(f"Invalid Plex user data: {plexUser}")
-                    if dryrun:
-                        logging.info(f"Dry run enabled. Skipping user removal for invalid user data: {plexUser}")
-                    else:
-                        # Attempt to remove if data is malformed but the user is accessible
-                        plexFunctions.removePlexUser(configFile, serverName, primaryEmail, plexConfig['standardLibraries'] + plexConfig['optionalLibraries'], dryrun=dryrun)
+                in_db = dbFunctions.userExists(
+                    user=dbConf["user"], password=dbConf["password"],
+                    server=dbConf["host"], database=dbConf["database"],
+                    primaryEmail=_safe_lower(email), serverName=_safe_lower(server_from_plex)
+                )
+                if not in_db:
+                    logging.info(
+                        "[DRY-RUN] Would remove Plex user '%s' from '%s' (not in DB)" if dryrun
+                        else "Removing Plex user '%s' from '%s' (not in DB)",
+                        email, server_cfg_name
+                    )
+                    try:
+                        shared = pc.get("standardLibraries", []) + pc.get("optionalLibraries", [])
+                        plexFunctions.removePlexUser(config_path, server_cfg_name, _safe_lower(email), shared, dryrun=dryrun)
+                    except Exception as e:
+                        logging.error("Error removing '%s' from Plex '%s': %s", email, server_cfg_name, e)
 
     except Exception as e:
-        logging.error(f"Error checking Plex users not in the database: {e}")
+        logging.error("Error in checkPlexUsersNotInDatabase: %s", e)
 
-def checkUsersEndDate(configFile, dryrun):
+def checkInactiveUsersOnPlex(config_path, dryrun):
     try:
-        # Load database configuration
-        dbConfig = configFunctions.getConfig(configFile)['database']
+        cfg = configFunctions.getConfig(config_path)
+        dbConf = cfg["database"]
+        plexConfs = [cfg[k] for k in cfg if str(k).startswith("PLEX-")]
 
-        # Connect to the database
-        connection = mysql.connector.connect(
-            host=dbConfig['host'],
-            user=dbConfig['user'],
-            password=dbConfig['password'],
-            database=dbConfig['database']
+        for pc in plexConfs:
+            server = pc["serverName"]
+            plex_users = _actionable_plex_users(pc, purpose="inactive audit")
+
+            inactive = dbFunctions.getUsersByStatus(
+                user=dbConf["user"], password=dbConf["password"], host=dbConf["host"],
+                database=dbConf["database"], status="Inactive", serverName=server
+            )
+            plex_emails = { _safe_lower(u.get("Email")) for u in plex_users if u.get("Email") }
+
+            for u in inactive:
+                pEmail = u.get("primaryEmail")
+                if not pEmail:
+                    logging.error("Inactive DB user missing primaryEmail: %s", u)
+                    continue
+                if _safe_lower(pEmail) in plex_emails:
+                    logging.warning("Inactive user '%s' on server '%s' still has Plex access.", pEmail, server)
+                    try:
+                        shared = pc.get("standardLibraries", []) + pc.get("optionalLibraries", [])
+                        plexFunctions.removePlexUser(CONFIG_FILE, server, _safe_lower(pEmail), shared, dryrun=dryrun)
+                    except Exception as e:
+                        logging.error("Error removing user '%s' from Plex '%s': %s", pEmail, server, e)
+
+    except Exception as e:
+        logging.error("Error checking inactive users on Plex server: %s", e)
+
+def checkUsersEndDate(config_path, dryrun):
+    try:
+        cfg = configFunctions.getConfig(config_path)
+        db = cfg["database"]
+
+        con = mysql.connector.connect(
+            host=db["host"], user=db["user"], password=db["password"], database=db["database"]
         )
-
-        # Create a cursor object
-        cursor = connection.cursor(dictionary=True)  # Use dictionary cursor to fetch results as dictionaries
-
-        # Query to select all active users
-        query = "SELECT * FROM users WHERE status = 'Active'"
-        cursor.execute(query)
-
-        # Fetch all active users
-        users = cursor.fetchall()
-
-        # Get current date
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT * FROM users WHERE status = 'Active'")
+        users = cur.fetchall()
         today = datetime.now().date()
 
-        # Iterate through active users
-        for user in users:
-            # Extract end date
-            endDate = user['endDate']
+        for u in users:
+            endDate = u.get("endDate")
+            if endDate is None:
+                continue
 
-            # Check if endDate is within 7 days
-            if endDate is not None:
-                # Extract user info
-                primaryEmail = user['primaryEmail']
-                primaryDiscord = user['primaryDiscord']
-                serverName = user['server']
-                fourk = user['4k']
+            primaryEmail = u.get("primaryEmail")
+            primaryDiscord = u.get("primaryDiscord")
+            serverName = u.get("server")
+            fourk = u.get("4k")
 
+            try:
+                streamCount = int(str(serverName)[-1])
+            except Exception:
+                streamCount = 2
+
+            daysLeft = (endDate - today).days
+            if daysLeft >= 8:
+                continue
+
+            logging.info(
+                "User with primaryEmail: %s, primaryDiscord: %s has %d days left.",
+                primaryEmail, primaryDiscord, daysLeft
+            )
+
+            plex_cfg, oneM, threeM, sixM, twelveM = _extract_prices_from_cfg(cfg, serverName, fourk)
+            if plex_cfg is None:
+                logging.info(
+                    "Skipping notifications for %s: user is on unconfigured Plex server '%s'.",
+                    primaryEmail, serverName
+                )
+                continue
+
+            if daysLeft < 0:
+                shared = plex_cfg.get("standardLibraries", []) + plex_cfg.get("optionalLibraries", [])
                 try:
-                    streamCount = int(serverName[-1])
-                except ValueError:
-                    # Handle the case where the last character is not a number
-                    streamCount = 2  # or any other default value you want to set
+                    if dryrun:
+                        logging.info("[DRY-RUN] Would remove expired Plex user %s on server %s", primaryEmail, serverName)
+                    else:
+                        plexFunctions.removePlexUser(config_path, serverName, primaryEmail, shared, dryrun=False)
+                except Exception as e:
+                    logging.error("Error removing expired user %s on server %s: %s", primaryEmail, serverName, e)
+                continue
 
-                daysLeft = (endDate - today).days
-                # Retrieve the matching Plex configuration from config.yml
-                plexConfigKey = f'PLEX-{serverName}'
-                # Retrieve the matching Plex configuration from config.yml
-                plexConfigs = configFunctions.getConfig(configFile)
+            # targets
+            toEmail = []
+            notifyEmail = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "notifyEmail")
+            if notifyEmail == "Primary":
+                toEmail = [dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "primaryEmail")]
+            elif notifyEmail == "Secondary":
+                toEmail = [dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "secondaryEmail")]
+            elif notifyEmail == "Both":
+                pE = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "primaryEmail")
+                sE = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "secondaryEmail")
+                toEmail = [e for e in (pE, sE) if e]
 
-                plexConfig = plexConfigs.get(plexConfigKey, None)
+            toDiscord = []
+            notifyDiscord = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "notifyDiscord")
+            if notifyDiscord == "Primary":
+                toDiscord = [dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "primaryDiscordId")]
+            elif notifyDiscord == "Secondary":
+                toDiscord = [dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "secondaryDiscordId")]
+            elif notifyDiscord == "Both":
+                pD = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "primaryDiscordId")
+                sD = dbFunctions.getDBField(CONFIG_FILE, serverName, primaryEmail, "secondaryDiscordId")
+                toDiscord = [d for d in (pD, sD) if d]
 
-                is4kSubscribed = fourk.lower() == 'yes'
-                pricing = plexConfig.get('4k' if is4kSubscribed else '1080p', None)
+            # send
+            try:
+                emailFunctions.sendSubscriptionReminder(
+                    CONFIG_FILE, toEmail, primaryEmail, daysLeft, fourk, streamCount,
+                    oneM, threeM, sixM, twelveM, dryrun=dryrun
+                )
+            except Exception as e:
+                logging.error("Email notify failed for %s: %s", primaryEmail, e)
 
-                # Set pricing values or None if they don't exist
-                oneM = pricing.get('1Month', None)
-                threeM = pricing.get('3Month', None)
-                sixM = pricing.get('6Month', None)
-                twelveM = pricing.get('12Month', None)
+            try:
+                discordFunctions.sendDiscordSubscriptionReminder(
+                    CONFIG_FILE, toDiscord, primaryEmail, daysLeft, fourk, streamCount,
+                    oneM, threeM, sixM, twelveM, dryrun=dryrun
+                )
+            except Exception as e:
+                logging.error("Discord notify failed for %s: %s", primaryEmail, e)
 
-                if plexConfig:
-                    # Log information about the user
-                    if daysLeft < 8:
-                        # Check if endDate is in the past
-                        logging.info(f"User with primaryEmail: {primaryEmail}, primaryDiscord: {primaryDiscord} has {daysLeft} days left.")
-
-                        if daysLeft < 0:
-                            sharedLibraries = plexConfig['standardLibraries'] + plexConfig['optionalLibraries']
-                            plexFunctions.removePlexUser(configFile, serverName, primaryEmail, sharedLibraries, dryrun=dryrun)
-                        else:
-                            # Determine which email(s) to use based on notifyEmail value
-                            notifyEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyEmail')
-                            if notifyEmail == 'Primary':
-                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')]
-                            elif notifyEmail == 'Secondary':
-                                toEmail = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')]
-                            elif notifyEmail == 'Both':
-                                primaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryEmail')
-                                secondaryEmail = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryEmail')
-                                toEmail = [primaryEmail, secondaryEmail]
-                            else:
-                                # Don't send an email if notifyEmail is 'None'
-                                toEmail = None
-
-                            notifyDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'notifyDiscord')
-                            if notifyDiscord == 'Primary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscordId')]
-                            elif notifyDiscord == 'Secondary':
-                                toDiscord = [dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscordId')]
-                            elif notifyDiscord == 'Both':
-                                primaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'primaryDiscordId')
-                                secondaryDiscord = dbFunctions.getDBField(configFile, serverName, primaryEmail, 'secondaryDiscordId')
-                                toDiscord = [primaryDiscord, secondaryDiscord]
-                            else:
-                                # Don't send an email if notifyDiscord is 'None'
-                                toDiscord = None
-
-                            emailFunctions.sendSubscriptionReminder(configFile, toEmail, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
-                            discordFunctions.sendDiscordSubscriptionReminder(configFile, toDiscord, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun=dryrun)
-
-                            discordIds = ['primaryDiscordId', 'secondaryDiscordId']
-
-                            # Get Active users from the database for the specific server
-                            activeUsers = dbFunctions.getUsersByStatus(
-                                user=dbConfig['user'],
-                                password=dbConfig['password'],
-                                host=dbConfig['host'],
-                                database=dbConfig['database'],
-                                status='Active',
-                                serverName=plexConfig['serverName']
-                            )
-
-                            if os.path.exists(userDataFile):
-                                discordUserData = discordFunctions.readCsv(userDataFile)
-
-                                for discordId in discordIds:
-                                    if discordId in user:
-                                        DiscordID = user[discordId]
-
-                                        # Check if there is at least one active status for the primaryDiscordId
-                                        active_status_exists = any(u.get('primaryDiscordId') == DiscordID for u in activeUsers)
-
-                                        if not active_status_exists:
-                                            for user_data in discordUserData:
-                                                if user_data.get('discord_id') == DiscordID:
-                                                    roles = user_data.get('roles')
-                                                    # Check if any roles in the CSV match the Plex role
-                                                    if plexConfig['role'].lower() in map(str.lower, roles):
-                                                        logging.warning(f"Inactive user '{user['primaryDiscord']}' still has {plexConfig['role']}")
-                                                        discordFunctions.removeRole(configFile, DiscordID, plexConfig['role'], dryrun=dryrun)
-                                    else:
-                                        logging.warning(f"Missing {discordId} key in user dictionary.")
-
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
+        cur.close()
+        con.close()
 
     except mysql.connector.Error as e:
-        logging.error(f"Error checking users' endDate: {e}")
+        logging.error("Error checking users' endDate: %s", e)
+
+# ========= Orchestration =========
 
 def dailyRun(args, dryrun):
-    logging.info(f"Starting Daily Run")
-    # Validate Configuration
-    configFunctions.checkConfig(configFile)
-    config = configFunctions.getConfig(configFile)
-    logging.info(f"Configuration file loaded successfully")
+    logging.info("Starting Daily Run")
+    configFunctions.checkConfig(CONFIG_FILE)
+    cfg = configFunctions.getConfig(CONFIG_FILE)
+    logging.info("Configuration file loaded successfully")
 
-    host = config['database']['host']
-    port = config['database']['port']
-    database = config['database']['database']
-    user = config['database']['user']
-    password = config['database']['password']
+    host = cfg["database"]["host"]
+    port = cfg["database"]["port"]
+    database = cfg["database"]["database"]
+    user = cfg["database"]["user"]
+    password = cfg["database"]["password"]
     table = "users"
 
-    # Validate Connection to Database
-    serverValidation = validateFunctions.validateServer(host, port)
-    if not serverValidation:
-        logging.error(f"Database server {host} is NOT listening on port {port}. Exiting.")
+    if not validateFunctions.validateServer(host, port):
+        logging.error("Database server %s is NOT listening on port %s.", host, port)
+        sys.exit(1)
+    if not validateFunctions.validateDBConnection(user, password, host, database):
+        logging.error("Unable to authenticate user %s to database server %s.", user, host)
+        sys.exit(1)
+    if not validateFunctions.validateDBDatabase(user, password, host, database):
+        logging.error("Database %s does not exist on %s.", database, host)
+        sys.exit(1)
+    if not validateFunctions.validateDBTable(user, password, host, database, table):
+        logging.error("Table %s does not exist in database %s.", table, database)
         sys.exit(1)
 
-    databaseValidation = validateFunctions.validateDBConnection(user, password, host, database)
-    if not databaseValidation:
-        logging.error(f"Unable to authenticate user {user} to database server {host}. Exiting.")
-        sys.exit(1)
+    logging.info("Database connection validated successfully. Proceeding with checks.")
 
-    validateDBDatabase = validateFunctions.validateDBDatabase(user, password, host, database)
-    if not validateDBDatabase:
-        logging.error(f"Database {database} does not exist on {host}. Exiting.")
-        sys.exit(1)
-
-    tableValidation = validateFunctions.validateDBTable(user, password, host, database, table)
-    if not tableValidation:
-        logging.error(f"Table {table} does not exist in database {database}. Exiting.")
-        sys.exit(1)
-
-    # All validations passed
-    logging.info(f"Database connection validated successfully. Proceeding with checks.")
-
-    # Check if there are any Plex configurations
-    plexConfigurations = [config[key] for key in config if key.startswith('PLEX-')]
-    if len(plexConfigurations) == 0:
+    plexConfs = [cfg[k] for k in cfg if str(k).startswith("PLEX-")]
+    if not plexConfs:
         logging.error("No valid Plex configurations found in the config file. Exiting.")
         sys.exit(1)
 
-    for plexConfig in plexConfigurations:
-        baseUrl = plexConfig.get("baseUrl")
-        token = plexConfig.get("token")
-        serverName = plexConfig.get("serverName")
-
+    for pc in plexConfs:
+        baseUrl = pc.get("baseUrl")
+        token = pc.get("token")
+        serverName = pc.get("serverName")
         if not baseUrl or not token:
-            logging.error(f"Invalid Plex configuration for server {serverName}. Missing baseUrl or token. Exiting.")
-            sys.exit(1)
+            logging.error("Invalid Plex configuration for server %s. Missing baseUrl or token.", serverName)
+            continue
+        if not validateFunctions.validatePlex(baseUrl, token):
+            logging.error("Unable to connect to Plex instance %s. Check baseUrl and token.", serverName)
+            continue
+        logging.info("Successfully connected to Plex instance: %s", serverName)
 
-        plexValidation = validateFunctions.validatePlex(baseUrl, token)
-        if not plexValidation:
-            logging.error(f"Unable to connect to Plex instance {serverName}. Check baseUrl and token. Exiting.")
-            sys.exit(1)
-
-        logging.info(f"Successfully connected to Plex instance: {serverName}")
-
-    # Perform regular checks
+    # Run checks (log-and-continue on errors)
     try:
-        checkPlexUsersNotInDatabase(configFile, dryrun=dryrun)
-        checkInactiveUsersOnPlex(configFile, dryrun=dryrun)
-        checkUsersEndDate(configFile, dryrun=dryrun)
-        checkInactiveUsersOnDiscord(configFile, dryrun=dryrun)
+        checkPlexUsersNotInDatabase(CONFIG_FILE, dryrun=dryrun)
     except Exception as e:
-        logging.error(f"An error occurred during execution: {e}. Exiting.")
-        sys.exit(1)
+        logging.error("checkPlexUsersNotInDatabase error: %s", e)
+    try:
+        checkInactiveUsersOnPlex(CONFIG_FILE, dryrun=dryrun)
+    except Exception as e:
+        logging.error("checkInactiveUsersOnPlex error: %s", e)
+    try:
+        checkUsersEndDate(CONFIG_FILE, dryrun=dryrun)
+    except Exception as e:
+        logging.error("checkUsersEndDate error: %s", e)
+    try:
+        checkInactiveUsersOnDiscord(CONFIG_FILE, dryrun=dryrun)
+    except Exception as e:
+        logging.error("checkInactiveUsersOnDiscord error: %s", e)
 
-    logging.info(f"Daily Run completed successfully.")
-
+    logging.info("Daily Run completed successfully.")
 
 def main():
-    parser = argparse.ArgumentParser(description='Harassarr Script')
-    parser.add_argument('-add', metavar='service', help='Add a service (e.g., plex)')
-
-    # Set default values based on environment variables
-    default_dryrun = os.getenv('DRYRUN', 'false').lower() == 'true'
-    default_time = os.getenv('TIME', '')
-
-    parser.add_argument('--dryrun', action='store_true', default=default_dryrun, help='Run in dry-run mode')
-    parser.add_argument('-time', metavar='time', type=str, default=default_time, help='Time that the script will run each day, use format HH:MM')
+    parser = argparse.ArgumentParser(description="Harassarr Script")
+    parser.add_argument("-add", metavar="service", help="Add a service (e.g., plex)")
+    parser.add_argument("--dryrun", action="store_true", help="Run in dry-run mode")
+    parser.add_argument("--dry-run", action="store_true", dest="dryrun2", help="Run in dry-run mode")
+    parser.add_argument("-time", metavar="time", type=str, default=os.getenv("TIME", ""), help="HH:MM daily run time")
+    parser.add_argument("--run-now", action="store_true", help="Run immediately once")
 
     args = parser.parse_args()
-    dryrun = args.dryrun
+    dryrun = bool(args.dryrun or args.dryrun2)
+    logging.info("CLI parsed: dryrun=%s, run_now=%s, time=%s", dryrun, bool(args.run_now), args.time or "(none)")
 
-    if args.time:
-        try:
-            # Attempt to parse the time string
-            runTime = datetime.strptime(args.time, "%H:%M").time()
-        except ValueError:
-            print("Error: Invalid time format. Please use the format HH:MM.")
-            exit(1)
-    else:
-        logging.info(f"No TIME to run set, running now once.")
+    # schedule logic
+    if args.run_now:
         dailyRun(args, dryrun=dryrun)
-        exit(0)
+        if not args.time:
+            sys.exit(0)
 
-    # Log the starting message
-    logging.info(f"Starting Daily Run at {runTime}")
+    if not args.time and not args.run_now:
+        dailyRun(args, dryrun=dryrun)
+        sys.exit(0)
 
-    # Schedule the script to run at the specified time
-    schedule.every().day.at(str(runTime)).do(dailyRun, args, dryrun=dryrun)
+    try:
+        run_time = datetime.strptime(args.time, "%H:%M").time()
+    except ValueError:
+        print("Error: Invalid time format. Use HH:MM.")
+        sys.exit(1)
 
-    # Run the scheduled jobs
+    logging.info("Starting Daily Run at %s", run_time)
+    schedule.every().day.at(str(run_time)).do(dailyRun, args, dryrun=dryrun)
     while True:
         schedule.run_pending()
         time.sleep(1)

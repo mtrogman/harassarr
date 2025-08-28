@@ -1,149 +1,316 @@
-# discordFunctions.py
+# modules/discordFunctions.py
+from __future__ import annotations
+
+import asyncio
+import json
 import logging
-import csv
+from pathlib import Path
+from typing import Iterable, Awaitable, Callable
+
 import discord
-from discord.ext import commands
-from discord import Embed
-import modules.configFunctions as configFunctions
+
+from modules import configFunctions
+
+RUN_CACHE = Path("./run_cache.json")
 
 
-def getDiscordConfig(config):
-    return config.get('discord', {})
+# ----------------- small run cache for DM-blocked flags -----------------
+def _load_cache() -> dict:
+    try:
+        if RUN_CACHE.exists():
+            return json.loads(RUN_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+def _save_cache(d: dict) -> None:
+    try:
+        RUN_CACHE.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+def _mark_dm_blocked(user_id: str) -> None:
+    d = _load_cache()
+    dm = d.get("dm_blocked", {})
+    dm[str(user_id)] = True
+    d["dm_blocked"] = dm
+    _save_cache(d)
 
 
-def getReminderSubject(config):
-    discordConfig = getDiscordConfig(config)
-    return discordConfig.get('reminderSubject', "<YOUR NAME>'s Plex Subscription Reminder - {daysLeft} Days Left")
+# ----------------- config helpers -----------------
+def _discord_cfg(configFile: str) -> dict:
+    cfg = configFunctions.getConfig(configFile)
+    d = cfg.get("discord", {}) if isinstance(cfg, dict) else {}
+    return {
+        "token": d.get("token"),
+        "guild_id": d.get("guildId"),
+        "reminderSubject": d.get("reminderSubject"),
+        "reminderBody": d.get("reminderBody"),
+        "removalSubject": d.get("removalSubject"),
+        "removalBody": d.get("removalBody"),
+    }
 
 
-def getReminderBody(config):
-    discordConfig = getDiscordConfig(config)
-    return discordConfig.get('reminderBody', "Dear User,\n\nYour subscription for email: {primaryEmail} is set to expire in {days_left} days. Please contact us if you wish to continue your subscription by replying to this message or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>")
+# ----------------- bootstrap runner (simple & safe) -----------------
+class _Runner(discord.Client):
+    def __init__(self, intents: discord.Intents, runner: Callable[[discord.Client], Awaitable[None]]):
+        super().__init__(intents=intents)
+        self._runner = runner
 
-
-def getRemovalSubject(config):
-    discordConfig = getDiscordConfig(config)
-    return discordConfig.get('removalSubject', "<YOUR NAME>'s Plex Subscription Ended")
-
-
-def getRemovalBody(config):
-    discordConfig = getDiscordConfig(config)
-    return discordConfig.get('removalBody', "Dear User,\n\nYour subscription for email: {primaryEmail} has ended on <YOUR NAME>'s Plex. Please contact us if you wish to continue your subscription by replying to this message or contact <YOUR NAME> on Discord (https://discord.gg/XXXXXXXX).\n\nBest regards,\n<YOUR NAME>")
-
-
-def sendDiscordMessage(configFile, toUser, subject, body):
-    config = configFunctions.getConfig(configFile)
-    discordConfig = getDiscordConfig(config)
-    botToken = discordConfig.get('token', '')
-
-    if not botToken:
-        logging.error("Discord bot token is missing in the configuration.")
-        return
-
-    # Create a Bot instance with intents
-    intents = discord.Intents.default()
-    intents.messages = True
-    intents.message_content = True  # Enable privileged intents
-    bot = commands.Bot(command_prefix='!', intents=intents)
-
-    @bot.event
-    async def on_ready():
-        user = None  # Initialize user to avoid UnboundLocalError
+    async def on_ready(self):
         try:
-            user = await bot.fetch_user(toUser[0])
+            await self._runner(self)
         except Exception as e:
-            logging.error(f"Discord User Error: {e}")
+            logging.error("Discord runner error: %s", e)
         finally:
-            if not user:
-                logging.error(f"Unable to fetch user, cannot send message")
-            else:
-                embed = Embed(title=f"**{subject}**", description=body, color=discord.Colour.blue())
-                try:
-                    await user.send(embed=embed)
-                except discord.errors.Forbidden as e:
-                    logging.warning(f"Failed to send message to {toUser[0]}: {e}")
-                except Exception as e:
-                    logging.error(f"Unexpected error: {e}")
-            await bot.close()
-
-    bot.run(botToken)
+            # Close gracefully after our work is done
+            try:
+                await self.close()
+            except Exception:
+                pass
 
 
-def sendDiscordSubscriptionReminder(configFile, toUser, primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM, dryrun):
-    config = configFunctions.getConfig(configFile)
-    subject = getReminderSubject(config).format(daysLeft=daysLeft)
-    body = getReminderBody(config).format(
-        primaryEmail=primaryEmail, daysLeft=daysLeft, streamCount=streamCount, fourk=fourk, oneM=oneM, threeM=threeM, sixM=sixM, twelveM=twelveM)
-    if dryrun:
-        logging.info(f"DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
-    else:
-        sendDiscordMessage(configFile, toUser, subject, body)
+def _run_client(token: str, intents: discord.Intents, runner: Callable[[discord.Client], Awaitable[None]]) -> None:
+    """
+    Start a short-lived discord.py client, run `runner(client)` after ready,
+    then return. We set reconnect=False to avoid close-races.
+    """
+    async def main():
+        client = _Runner(intents=intents, runner=runner)
+        await client.start(token, reconnect=False)
+
+    # Own the event loop for this short run
+    asyncio.run(main())
 
 
-def sendDiscordSubscriptionRemoved(configFile, toUser, primaryEmail, dryrun):
-    config = configFunctions.getConfig(configFile)
-    subject = getRemovalSubject(config)
-    body = getRemovalBody(config).format(primaryEmail=primaryEmail)
-    if dryrun:
-        logging.info(f"DISCORD NOTIFICATION ({primaryEmail} SKIPPED DUE TO DRYRUN")
-    else:
-        sendDiscordMessage(configFile, toUser, subject, body)
+# ----------------- templates -----------------
+def _render(tpl: str, ctx: dict) -> str:
+    try:
+        return tpl.format_map(ctx)
+    except Exception as e:
+        logging.error("Discord template render failed: %s", e)
+        return tpl
+
+def _ctx(primaryEmail: str, daysLeft: int, fourk: str, streamCount: int,
+         oneM: str, threeM: str, sixM: str, twelveM: str) -> dict:
+    return {
+        "primaryEmail": primaryEmail,
+        "daysLeft": daysLeft,
+        "fourk": fourk,
+        "streamCount": streamCount,
+        "oneM": oneM or "",
+        "threeM": threeM or "",
+        "sixM": sixM or "",
+        "twelveM": twelveM or "",
+    }
 
 
-def removeRole(configFile, discordUserId, roleName, dryrun):
-    config = configFunctions.getConfig(configFile)
-    discordConfig = getDiscordConfig(config)
-    botToken = discordConfig.get('token', '')
-
-    if not botToken:
-        logging.error("Discord bot token is missing in the configuration.")
+# ----------------- public API -----------------
+def sendDiscordSubscriptionReminder(
+    configFile: str,
+    toDiscordIds: list[str] | None,
+    primaryEmail: str,
+    daysLeft: int,
+    fourk: str,
+    streamCount: int,
+    oneM: str, threeM: str, sixM: str, twelveM: str,
+    dryrun: bool = False
+) -> None:
+    if not toDiscordIds:
         return
 
-    # Create a Bot instance with intents
-    intents = discord.Intents.default()
-    intents.messages = True
-    bot = commands.Bot(command_prefix='!', intents=intents)
+    cfg = _discord_cfg(configFile)
+    token = cfg.get("token")
+    if not token:
+        logging.error("Discord token missing in config; cannot send DMs.")
+        return
 
-    @bot.event
-    async def on_ready():
-        user = await bot.fetch_user(discordUserId)
-        guildId = int(discordConfig.get('guildId', ''))
+    subj, body = cfg.get("reminderSubject"), cfg.get("reminderBody")
+    if not subj or not body:
+        logging.error("Discord reminder templates missing in config: discord.reminderSubject/body")
+        return
 
-        guild = bot.get_guild(guildId)
+    ctx = _ctx(primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM)
+    content = f"{_render(subj, ctx)}\n{_render(body, ctx)}"
 
-        if user:
-            # Use fetch_member instead of get_member
-            member = await guild.fetch_member(user.id)
+    if dryrun:
+        logging.info("[DRY-RUN] Would DM Discord IDs %s for %s (daysLeft=%s)", toDiscordIds, primaryEmail, daysLeft)
+        return
 
-            if member:
-                role = discord.utils.get(guild.roles, name=roleName)
+    intents = discord.Intents.none()  # minimal intents for DMs
 
-                if role:
-                    if dryrun:
-                        logging.info(f"DISCORD ROLE REMOVAL {roleName} SKIPPED FOR {member.name} ({member.id} DUE TO DRYRUN")
-                    else:
-                        await member.remove_roles(role)
-                        logging.info(f"Removed role {roleName} from user {member.name} ({member.id})")
+    async def runner(client: discord.Client):
+        for uid in toDiscordIds:
+            if not uid:
+                continue
+            try:
+                user = await client.fetch_user(int(uid))
+                dm = await user.create_dm()
+                await dm.send(content)
+            except discord.Forbidden as e:
+                # code 50007: "Cannot send messages to this user"
+                if getattr(e, "code", None) == 50007 or "Cannot send messages to this user" in str(e):
+                    logging.warning("Discord: DMs disabled for user_id=%s (50007).", uid)
+                    _mark_dm_blocked(str(uid))
                 else:
-                    logging.error(f"Role {roleName} not found")
-            else:
-                logging.error(f"Member {discordUserId} not found in the guild")
-        else:
-            logging.error(f"User {discordUserId} not found")
+                    logging.error("Discord Forbidden sending DM to %s: %s", uid, e)
+            except Exception as e:
+                logging.error("Discord error sending DM to %s: %s", uid, e)
 
-        await bot.close()
+    _run_client(token, intents, runner)
 
-    bot.run(botToken)
 
-def readCsv(userDataFile):
-    users = []
-    with open(userDataFile, newline='', encoding='utf-8') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            # Assuming the CSV format is [Discord Name, Discord User ID, Roles]
-            users.append({
-                'name': row[0],
-                'discord_id': row[1],
-                'roles': [] if len(row) < 3 else [role.strip() for role in row[2].split(',')]
-            })
-    return users
+def sendSubscriptionRemoved(
+    configFile: str,
+    toDiscordIds: list[str] | None,
+    primaryEmail: str,
+    daysLeft: int,
+    fourk: str,
+    streamCount: int,
+    oneM: str, threeM: str, sixM: str, twelveM: str,
+    dryrun: bool = False
+) -> None:
+    if not toDiscordIds:
+        return
+
+    cfg = _discord_cfg(configFile)
+    token = cfg.get("token")
+    if not token:
+        logging.error("Discord token missing in config; cannot send DMs.")
+        return
+
+    subj, body = cfg.get("removalSubject"), cfg.get("removalBody")
+    if not subj or not body:
+        logging.error("Discord removal templates missing in config: discord.removalSubject/body")
+        return
+
+    ctx = _ctx(primaryEmail, daysLeft, fourk, streamCount, oneM, threeM, sixM, twelveM)
+    content = f"{_render(subj, ctx)}\n{_render(body, ctx)}"
+
+    if dryrun:
+        logging.info("[DRY-RUN] Would DM (removal) Discord IDs %s for %s", toDiscordIds, primaryEmail)
+        return
+
+    intents = discord.Intents.none()
+
+    async def runner(client: discord.Client):
+        for uid in toDiscordIds:
+            if not uid:
+                continue
+            try:
+                user = await client.fetch_user(int(uid))
+                dm = await user.create_dm()
+                await dm.send(content)
+            except discord.Forbidden as e:
+                if getattr(e, "code", None) == 50007 or "Cannot send messages to this user" in str(e):
+                    logging.warning("Discord: DMs disabled for user_id=%s (50007).", uid)
+                    _mark_dm_blocked(str(uid))
+                else:
+                    logging.error("Discord Forbidden sending removal DM to %s: %s", uid, e)
+            except Exception as e:
+                logging.error("Discord error sending removal DM to %s: %s", uid, e)
+
+    _run_client(token, intents, runner)
+
+
+def removeRole(configFile: str, discordId: str, role_name: str, dryrun: bool = False) -> None:
+    cfg = _discord_cfg(configFile)
+    token = cfg.get("token")
+    guild_id = cfg.get("guild_id")
+    if not token or not guild_id:
+        logging.error("Discord token/guildId missing; cannot remove roles.")
+        return
+
+    if dryrun:
+        logging.info("[DRY-RUN] Would remove role '%s' from member %s", role_name, discordId)
+        return
+
+    intents = discord.Intents.none()
+    intents.guilds = True
+    intents.members = True  # requires "Server Members Intent" enabled
+
+    async def runner(client: discord.Client):
+        try:
+            guild = client.get_guild(int(guild_id)) or await client.fetch_guild(int(guild_id))
+            if not guild:
+                logging.error("Discord: bot not in guild %s", guild_id)
+                return
+
+            try:
+                roles = await guild.fetch_roles()
+            except AttributeError:
+                roles = getattr(guild, "roles", [])
+            target = next((r for r in roles if r.name.lower() == role_name.lower()), None)
+            if not target:
+                logging.warning("Discord: role '%s' not found in guild %s", role_name, guild_id)
+                return
+
+            try:
+                member = await guild.fetch_member(int(discordId))
+            except Exception:
+                member = guild.get_member(int(discordId))
+            if not member:
+                logging.warning("Discord: member %s not found in guild %s", discordId, guild_id)
+                return
+
+            await member.remove_roles(target, reason="Harassarr: inactive user cleanup")
+            logging.info("Removed role '%s' from member %s", role_name, discordId)
+
+        except discord.Forbidden as e:
+            logging.error("Discord Forbidden removing role '%s' from %s: %s", role_name, discordId, e)
+        except Exception as e:
+            logging.error("Discord error removing role '%s' from %s: %s", role_name, discordId, e)
+
+    _run_client(token, intents, runner)
+
+
+def members_having_role(configFile: str, role_name: str, ids: Iterable[str]) -> set[str]:
+    """
+    Return subset of `ids` that currently have role_name in the configured guild.
+    """
+    cfg = _discord_cfg(configFile)
+    token = cfg.get("token")
+    guild_id = cfg.get("guild_id")
+    if not token or not guild_id:
+        logging.error("Discord token/guildId missing; cannot verify roles.")
+        return set()
+
+    ids = {str(i) for i in ids if i}
+    if not ids:
+        return set()
+
+    intents = discord.Intents.none()
+    intents.guilds = True
+    intents.members = True
+
+    have: set[str] = set()
+
+    async def runner(client: discord.Client):
+        try:
+            guild = client.get_guild(int(guild_id)) or await client.fetch_guild(int(guild_id))
+            if not guild:
+                logging.error("Discord: bot not in guild %s", guild_id)
+                return
+
+            try:
+                roles = await guild.fetch_roles()
+            except AttributeError:
+                roles = getattr(guild, "roles", [])
+            target = next((r for r in roles if r.name.lower() == role_name.lower()), None)
+            if not target:
+                logging.warning("Discord: role '%s' not found in guild %s", role_name, guild_id)
+                return
+
+            for sid in ids:
+                member = None
+                try:
+                    member = await guild.fetch_member(int(sid))
+                except Exception:
+                    member = guild.get_member(int(sid))
+                if member and any(r.id == target.id for r in getattr(member, "roles", [])):
+                    have.add(sid)
+        except Exception as e:
+            logging.error("Discord role-audit error: %s", e)
+
+    _run_client(token, intents, runner)
+    return have

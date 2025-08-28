@@ -1,5 +1,0 @@
-primaryEmail,secondaryEmail,primaryDiscord,primaryDiscordId,secondaryDiscord,secondaryDiscordId,notifyDiscord,notifyEmail,status,server,4k,paymentMethod,paymentPerson,paidAmount,joinDate,startDate,endDate
-johndoe@gmail.com,,JohnDoe,1111111111111111,,,Primary,Primary,Active,ServerA,Yes,PayPal,John Doe,348.92,1/1/2020,1/1/2021,1/1/2020
-JaneDoe@gmail.com,,JaneDoe,2222222222222222,,,Primary,Both,Active,ServerB,No,CashApp,Jane Doe,39.28,1/1/2020,1/1/2021,1/1/2020
-johnPLEX@gmail.com,,JohnPlex,3333333333333333,,,Primary,Primary,Inactive,ServerC,Yes,Venmo,John Plex,22.22,1/1/2020,1/1/2021,1/1/2020
-janePLEX@gmail.com,,JanePlex,4444444444444444,JohnPlex,1111111111111111,Secondary,Primary,Inactive,ServerD,No,PayPal,Jane Plex,98.87,1/1/2020,1/1/2021,1/1/2020
