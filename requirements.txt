@@ -3,3 +3,4 @@ pyyaml
 plexapi
 mysql-connector-python==8.4.0
 schedule
+pydantic
